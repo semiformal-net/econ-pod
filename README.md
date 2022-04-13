@@ -14,9 +14,10 @@ First change `base_url` in `rssServer.py` to suit your network.
 
 ```
 docker build -t econpod .
-docker run -it -p 5500:5500 -v /home/user/Issue_9291_20220409_The_Economist_Full_edition/:/app/static/podcast1/audios econpod
+docker run -it -p 5500:5500 econpod
 ```
 
+Now point your podcasting software to `http://127.0.0.1:5500/podcast1/rss`
 
 ## Credit
 

@@ -2,11 +2,48 @@ from flask import Flask, render_template, make_response, send_from_directory, se
 import json
 import os
 import datetime
+import pandas as pd
+# for zip file download and extract
+from urllib.request import urlopen
+from zipfile import ZipFile
+from io import BytesIO
 
 app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
 
 #
-# 1. We build a json called podcasts which contains info about the files
+# 1. get the most recent episode,
+#    code courtesy of https://github.com/evmn/the-economist
+#
+
+schedule_day = pd.date_range('20120101',datetime.date.today().strftime('%Y%m%d'),freq='W-SAT')
+weeks=0
+
+for i in schedule_day:
+	year = i.strftime('%Y')
+	month = i.strftime('%m')
+	day = i.strftime('%d')
+	date = i.strftime('%Y%m%d')
+	issue = 8766+weeks
+	if (int(month) != 12) or (int(day) < 25): # no issue near xmas
+#	if (int(month) == 12) and (int(day) >= 24):
+#		weeks=weeks+0
+#	else:
+#		print(issue, date)
+		#print("http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date))
+		weeks=weeks+1
+#print(issue, date)
+issuezip="http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date)
+
+print('Fetching {}'.format(issuezip))
+
+# unzip on the fly
+with urlopen(issuezip) as zipresp:
+    with ZipFile(BytesIO(zipresp.read())) as zfile:
+        zfile.extractall('/app/static/podcast1/audios') # put unzipped files into the podcast static dir
+
+print('Done.')
+#
+# 2. We build a json called podcasts which contains info about the files
 #
 podcasts={
 "baseUrl" : "http://192.168.2.245:5500/",
@@ -26,7 +63,7 @@ podcasts={
 }
 
 #
-# 2. to complete the podcasts json we scan the static/podcast1/audios/ directory and gather info about each mp3 file
+# 3. to complete the podcasts json we scan the static/podcast1/audios/ directory and gather info about each mp3 file
 #
 audios=[]
 adir='static/'+podcasts['podcasts']['podcast1']['audiosFolder']
@@ -57,12 +94,11 @@ podcasts['podcasts']['podcast1']['audios'] = audios
 
 print('Processed {} file of {}MB size'.format( counter,sizecounter/1024/1024  ))
 
-# this file is not used, but written for lols
-with open("podcasts.json", "w") as outfile:
-    json.dump(podcasts, outfile)
+#with open("podcasts.json", "w") as outfile:
+#    json.dump(podcasts, outfile)
 
 #
-# 3. finally we serve the rss using a template
+# 4. finally we serve the rss using a template
 #
 
 @app.route('/<podcast>/rss')
