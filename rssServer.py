@@ -5,6 +5,7 @@ import datetime
 import pandas as pd
 # for zip file download and extract
 from urllib.request import urlopen
+from urllib.error import HTTPError
 from zipfile import ZipFile
 from io import BytesIO
 
@@ -33,6 +34,16 @@ for i in schedule_day:
 		weeks=weeks+1
 #print(issue, date)
 issuezip="http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date)
+
+# test the url. This could be a while(true), sleep loop
+try:
+    a=urlopen(issuezip)
+except HTTPError as e:
+    # "e" can be treated as a http.client.HTTPResponse object
+    print('Error: fetching {}: {}'.format(issuezip,e))
+    os.exit(1)
+a.close()
+del a
 
 print('Fetching {}'.format(issuezip))
 
