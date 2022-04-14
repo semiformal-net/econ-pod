@@ -14,12 +14,11 @@ app = Flask(__name__, static_url_path='', static_folder='static', template_folde
 #
 # 1. get the most recent episode,
 #    code courtesy of https://github.com/evmn/the-economist
+#    issues are labelled on saturday but are released much before. Run this on Thursday night or Friday
 #
-# next_saturday
 d = datetime.date.today()
 t = datetime.timedelta((12 - d.weekday()) % 7)
 next_saturday=d + t
-'2013-06-01'
 
 schedule_day = pd.date_range('20120101',next_saturday.strftime('%Y%m%d'),freq='W-SAT')
 weeks=0
