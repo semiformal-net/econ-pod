@@ -1,6 +1,7 @@
 from flask import Flask, render_template, make_response, send_from_directory, send_file, url_for
 import json
 import os
+import sys
 import datetime
 import pandas as pd
 # for zip file download and extract
@@ -11,16 +12,24 @@ from io import BytesIO
 
 app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
 
+# If true then the app will try to download the *upcoming* issue (from next saturday) - this should be available Thursday evening Eastern time
+# If false then the app will try to download the *most recent* issue (from last saturday)
+NEXT_SAT=False
+
 #
 # 1. get the most recent episode,
 #    code courtesy of https://github.com/evmn/the-economist
-#    issues are labelled on saturday but are released much before. Run this on Thursday night or Friday
 #
+# next_saturday
 d = datetime.date.today()
 t = datetime.timedelta((12 - d.weekday()) % 7)
 next_saturday=d + t
 
-schedule_day = pd.date_range('20120101',next_saturday.strftime('%Y%m%d'),freq='W-SAT')
+if NEXT_SAT:
+    schedule_day = pd.date_range('20120101',next_saturday.strftime('%Y%m%d'),freq='W-SAT')
+else:
+    schedule_day = pd.date_range('20120101', d ,freq='W-SAT')
+
 weeks=0
 
 for i in schedule_day:
@@ -45,7 +54,7 @@ try:
 except HTTPError as e:
     # "e" can be treated as a http.client.HTTPResponse object
     print('Error: fetching {}: {}'.format(issuezip,e))
-    os.exit(1)
+    sys.exit(1)
 a.close()
 del a
 
