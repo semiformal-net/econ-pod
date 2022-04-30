@@ -23,6 +23,8 @@ NEXT_SAT=False
 # next_saturday
 d = datetime.date.today()
 t = datetime.timedelta((12 - d.weekday()) % 7)
+if t.days == 0: # if today is a saturday jump ahead a week
+    t=datetime.timedelta(days=7)
 next_saturday=d + t
 
 if NEXT_SAT:
