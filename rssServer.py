@@ -14,7 +14,7 @@ app = Flask(__name__, static_url_path='', static_folder='static', template_folde
 
 # If true then the app will try to download the *upcoming* issue (from next saturday) - this should be available Thursday evening Eastern time
 # If false then the app will try to download the *most recent* issue (from last saturday)
-NEXT_SAT=False
+NEXT_SAT=True
 
 #
 # 1. get the most recent episode,
@@ -56,7 +56,7 @@ try:
 except HTTPError as e:
     # "e" can be treated as a http.client.HTTPResponse object
     print('Error: fetching {}: {}'.format(issuezip,e))
-    sys.exit(1)
+    sys.exit(4) # exit code 4 will kill gunicorn as well, which is what we want
 a.close()
 del a
 
