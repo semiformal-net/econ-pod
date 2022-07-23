@@ -26,48 +26,61 @@ t = datetime.timedelta((12 - d.weekday()) % 7)
 if t.days == 0: # if today is a saturday jump ahead a week
     t=datetime.timedelta(days=7)
 next_saturday=d + t
+schedule_day = pd.date_range('20120101',next_saturday.strftime('%Y%m%d'),freq='W-SAT') # a long list of saturdays
 
-if NEXT_SAT:
-    schedule_day = pd.date_range('20120101',next_saturday.strftime('%Y%m%d'),freq='W-SAT')
-else:
-    schedule_day = pd.date_range('20120101', d ,freq='W-SAT')
-
+issues=[]
 weeks=0
-
 for i in schedule_day:
-	year = i.strftime('%Y')
-	month = i.strftime('%m')
-	day = i.strftime('%d')
-	date = i.strftime('%Y%m%d')
-	issue = 8766+weeks
-	if (int(month) != 12) or (int(day) < 25): # no issue near xmas
+    year = i.strftime('%Y')
+    month = i.strftime('%m')
+    day = i.strftime('%d')
+    date = i.strftime('%Y%m%d')
+    issue = 8766+weeks
+    issues.append(issue)
+    if (int(month) != 12) or (int(day) < 25): # no issue near xmas
 #	if (int(month) == 12) and (int(day) >= 24):
 #		weeks=weeks+0
 #	else:
 #		print(issue, date)
-		#print("http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date))
-		weeks=weeks+1
-#print(issue, date)
-issuezip="http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date)
+        #print("http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date))
+        weeks=weeks+1
 
-# test the url. This could be a while(true), sleep loop
-try:
-    a=urlopen(issuezip)
-except HTTPError as e:
-    # "e" can be treated as a http.client.HTTPResponse object
-    print('Error: fetching {}: {}'.format(issuezip,e))
-    sys.exit(4) # exit code 4 will kill gunicorn as well, which is what we want
-a.close()
-del a
+for sat in [-1,-2]:
+    got_issue=0
 
-print('Fetching {}'.format(issuezip))
+    year = schedule_day[sat].strftime('%Y')
+    month = schedule_day[sat].strftime('%m')
+    day = schedule_day[sat].strftime('%d')
+    date = schedule_day[sat].strftime('%Y%m%d')
+    issue = issues[sat]
 
-# unzip on the fly
-with urlopen(issuezip) as zipresp:
-    with ZipFile(BytesIO(zipresp.read())) as zfile:
-        zfile.extractall('/app/static/podcast1/audios') # put unzipped files into the podcast static dir
+    issuezip="http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date)
+    try:
+        a=urlopen(issuezip)
+    except HTTPError as e:
+        # "e" can be treated as a http.client.HTTPResponse object
+        print('Error: fetching {}: {}'.format(issuezip,e))
+        got_issue=0
+        continue
+    a.close()
+    del a
 
-print('Done.')
+    now = datetime.datetime.now()
+    print('Fetching {}'.format(issuezip))
+
+    # unzip on the fly
+    with urlopen(issuezip) as zipresp:
+        with ZipFile(BytesIO(zipresp.read())) as zfile:
+            zfile.extractall('/app/static/podcast1/audios') # put unzipped files into the podcast static dir
+
+    now2 = datetime.datetime.now()
+    dltime=(now2-now).total_seconds
+
+    got_issue=1
+
+if got_issue == 0:
+    print("Error: Unable to get an issue")
+    sys.exit(4)
 #
 # 2. We build a json called podcasts which contains info about the files
 #
@@ -118,7 +131,9 @@ for filename in sorted(os.listdir( adir )):
 
 podcasts['podcasts']['podcast1']['audios'] = audios
 
-print('Processed {} file of {}MB size'.format( counter,sizecounter/1024/1024  ))
+filesize_mb=sizecounter/1024/1024
+dl_time=(now2-now).total_seconds()
+print('Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dl_time , filesize_mb/dl_time  ))
 
 #with open("podcasts.json", "w") as outfile:
 #    json.dump(podcasts, outfile)
