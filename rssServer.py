@@ -12,10 +12,6 @@ from io import BytesIO
 
 app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
 
-# If true then the app will try to download the *upcoming* issue (from next saturday) - this should be available Thursday evening Eastern time
-# If false then the app will try to download the *most recent* issue (from last saturday)
-NEXT_SAT=True
-
 #
 # 1. get the most recent episode,
 #    code courtesy of https://github.com/evmn/the-economist
@@ -46,6 +42,9 @@ for i in schedule_day:
         #print("http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date))
         weeks=weeks+1
 
+#
+# Try "next saturday" then "this saturday," then give up...
+#
 for sat in [-1,-2]:
     got_issue=0
 
@@ -133,7 +132,6 @@ for filename in sorted(os.listdir( adir )):
 podcasts['podcasts']['podcast1']['audios'] = audios
 
 filesize_mb=sizecounter/1024/1024
-dl_time=(now2-now).total_seconds()
 print('Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dl_time , filesize_mb/dl_time  ))
 
 #with open("podcasts.json", "w") as outfile:
