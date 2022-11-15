@@ -10,15 +10,59 @@ from urllib.error import HTTPError
 from zipfile import ZipFile
 from io import BytesIO
 
-app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
+##
+#  FUNCTIONS
+#
+##
+def issue_ready(date,issue):
+    issue_ready=False
+    year = date.strftime('%Y')
+    month = date.strftime('%m')
+    day = date.strftime('%d')
+    date = date.strftime('%Y%m%d')
 
-# If true then the app will try to download the *upcoming* issue (from next saturday) - this should be available Thursday evening Eastern time
-# If false then the app will try to download the *most recent* issue (from last saturday)
-NEXT_SAT=True
+    issuezip="http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date)
+    try:
+        a=urlopen(issuezip)
+    except HTTPError as e:
+        # "e" can be treated as a http.client.HTTPResponse object
+        print('Error: fetching {}: {}'.format(issuezip,e))
+    else:
+        issue_ready=True
+
+    return issue_ready, issuezip
+
+def dl_issue(issuezip):
+
+    #
+    # assumes that url has been checked
+    #
+
+    now = datetime.datetime.now()
+    print('Fetching {}'.format(issuezip))
+
+    # unzip on the fly
+    with urlopen(issuezip) as zipresp:
+        with ZipFile(BytesIO(zipresp.read())) as zfile:
+            zfile.extractall('/app/static/podcast1/audios') # put unzipped files into the podcast static dir
+
+    now2 = datetime.datetime.now()
+    dltime=(now2-now).total_seconds()
+
+    return dltime
 
 #
-# 1. get the most recent episode,
-#    code courtesy of https://github.com/evmn/the-economist
+#
+#
+#
+
+baseUrl = os.getenv('BASE_URL')
+if baseUrl is None:
+    baseUrl='http://127.0.0.1:5500/'
+app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
+
+#
+# Build schedule_day[] and issues[] lists: code courtesy of https://github.com/evmn/the-economist
 #
 # next_saturday
 d = datetime.date.today()
@@ -39,55 +83,25 @@ for i in schedule_day:
     issue = issue - 1 # issue got out of sync
     issues.append(issue)
     if (int(month) != 12) or (int(day) < 25): # no issue near xmas
-#	if (int(month) == 12) and (int(day) >= 24):
-#		weeks=weeks+0
-#	else:
-#		print(issue, date)
-        #print("http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date))
         weeks=weeks+1
 
-for sat in [-1,-2]:
-    got_issue=0
+#
+# 2. loop, looking for a valid issue
+#
+for i in list(zip( schedule_day[:-3:-1], issues[:-3:-1])): # last two items in list, in reverse order
+    ready, issuezip=issue_ready(i[0],i[1])
+    if ready:
+        dltime=dl_issue(issuezip)
+        break
 
-    year = schedule_day[sat].strftime('%Y')
-    month = schedule_day[sat].strftime('%m')
-    day = schedule_day[sat].strftime('%d')
-    date = schedule_day[sat].strftime('%Y%m%d')
-    issue = issues[sat]
-
-    issuezip="http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date)
-    try:
-        a=urlopen(issuezip)
-    except HTTPError as e:
-        # "e" can be treated as a http.client.HTTPResponse object
-        print('Error: fetching {}: {}'.format(issuezip,e))
-        got_issue=0
-        continue
-    a.close()
-    del a
-
-    now = datetime.datetime.now()
-    print('Fetching {}'.format(issuezip))
-
-    # unzip on the fly
-    with urlopen(issuezip) as zipresp:
-        with ZipFile(BytesIO(zipresp.read())) as zfile:
-            zfile.extractall('/app/static/podcast1/audios') # put unzipped files into the podcast static dir
-
-    now2 = datetime.datetime.now()
-    dltime=(now2-now).total_seconds
-
-    got_issue=1
-    break
-
-if got_issue == 0:
+if not ready:
     print("Error: Unable to get an issue")
     sys.exit(4)
 #
-# 2. We build a json called podcasts which contains info about the files
+# 3a. We build a json called podcasts which contains info about the files
 #
 podcasts={
-"baseUrl" : "http://192.168.2.245:5500/",
+"baseUrl" : baseUrl,
 "podcasts" : {
     "podcast1" : {
     "title": "podcast1",
@@ -104,7 +118,7 @@ podcasts={
 }
 
 #
-# 3. to complete the podcasts json we scan the static/podcast1/audios/ directory and gather info about each mp3 file
+# 3b. to complete the podcasts json we scan the static/podcast1/audios/ directory and gather info about each mp3 file
 #
 audios=[]
 adir='static/'+podcasts['podcasts']['podcast1']['audiosFolder']
@@ -134,11 +148,7 @@ for filename in sorted(os.listdir( adir )):
 podcasts['podcasts']['podcast1']['audios'] = audios
 
 filesize_mb=sizecounter/1024/1024
-dl_time=(now2-now).total_seconds()
-print('Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dl_time , filesize_mb/dl_time  ))
-
-#with open("podcasts.json", "w") as outfile:
-#    json.dump(podcasts, outfile)
+print('Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
 
 #
 # 4. finally we serve the rss using a template
