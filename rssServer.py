@@ -12,10 +12,6 @@ from io import BytesIO
 
 app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
 
-# If true then the app will try to download the *upcoming* issue (from next saturday) - this should be available Thursday evening Eastern time
-# If false then the app will try to download the *most recent* issue (from last saturday)
-NEXT_SAT=True
-
 #
 # 1. get the most recent episode,
 #    code courtesy of https://github.com/evmn/the-economist
@@ -39,11 +35,6 @@ for i in schedule_day:
     issue = issue - 1 # issue got out of sync
     issues.append(issue)
     if (int(month) != 12) or (int(day) < 25): # no issue near xmas
-#	if (int(month) == 12) and (int(day) >= 24):
-#		weeks=weeks+0
-#	else:
-#		print(issue, date)
-        #print("http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date))
         weeks=weeks+1
 
 for sat in [-1,-2]:
