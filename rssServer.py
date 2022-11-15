@@ -56,6 +56,9 @@ def dl_issue(issuezip):
 #
 #
 
+baseUrl = os.getenv('BASE_URL')
+if baseUrl is None:
+    baseUrl='http://127.0.0.1:5500/'
 app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
 
 #
@@ -98,7 +101,7 @@ if not ready:
 # 3a. We build a json called podcasts which contains info about the files
 #
 podcasts={
-"baseUrl" : "http://192.168.2.245:5500/",
+"baseUrl" : baseUrl,
 "podcasts" : {
     "podcast1" : {
     "title": "podcast1",
