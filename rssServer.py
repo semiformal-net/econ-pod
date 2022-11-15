@@ -75,7 +75,7 @@ for sat in [-1,-2]:
             zfile.extractall('/app/static/podcast1/audios') # put unzipped files into the podcast static dir
 
     now2 = datetime.datetime.now()
-    dltime=(now2-now).total_seconds
+    dltime=(now2-now).total_seconds()
 
     got_issue=1
     break
