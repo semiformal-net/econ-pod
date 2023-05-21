@@ -10,7 +10,8 @@ from urllib.error import HTTPError
 from zipfile import ZipFile
 from io import BytesIO
 import pickle
-from apscheduler.schedulers.background import BackgroundScheduler
+#from apscheduler.schedulers.background import BackgroundScheduler
+from flask_apscheduler import APScheduler
 import atexit
 
 #
@@ -22,6 +23,9 @@ baseUrl = os.getenv('BASE_URL')
 if baseUrl is None:
     baseUrl='http://127.0.0.1:5500/'
 
+# set configuration values
+class Config:
+    SCHEDULER_API_ENABLED = True
 
 class Podcast:
     def __init__(self, publication_date=None, is_published: bool=False, issue_number: int=0):
@@ -132,7 +136,7 @@ def dl_issue(issuezip):
     #
 
     now = datetime.datetime.now()
-    print('Fetching {}'.format(issuezip))
+    print('[*] Fetching {}'.format(issuezip))
 
     # unzip on the fly
     with urlopen(issuezip) as zipresp:
@@ -214,6 +218,18 @@ def build_json(base_json):
     podcasts['podcasts']['podcast1']['audios'] = audios
     return counter, sizecounter, podcasts
 
+#
+# END FUNCTIONS ---------------------------------------------------------------------------
+#
+
+app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
+app.config.from_object(Config())
+
+scheduler = APScheduler()
+# Shut down the scheduler when exiting the app
+atexit.register(lambda: scheduler.shutdown())
+
+@scheduler.task('interval', id='cron', seconds=30, misfire_grace_time=900)
 def cron():
     try:
         with open('/tmp/current_issue.pkl', 'rb') as f:
@@ -235,17 +251,11 @@ def cron():
             pickle.dump(n, f)
         os.system('rm -rf /app/static/podcast1/audios/*') # assume unix host
         dltime=dl_issue(n.url) # download and extract the issue
+        # I don't get how the main flask app has the context of podcasts but this seems to work?'
         counter, sizecounter, podcasts = build_json(base_podcasts)
 
         filesize_mb=sizecounter/1024/1024
         print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
-
-
-#
-# END FUNCTIONS ---------------------------------------------------------------------------
-#
-
-app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
 
 @app.route('/<podcast>/rss')
 def rss(podcast):
@@ -256,28 +266,19 @@ def rss(podcast):
 
 #if __name__ == "__main__":
 
-scheduler = BackgroundScheduler()
-# Shut down the scheduler when exiting the app
-atexit.register(lambda: scheduler.shutdown())
+scheduler.init_app(app)
 
 current_issue = init_current_issue()
 current_issue=Podcast(publication_date=datetime.datetime( 2023,5,13,0,0,0 ), is_published=True, issue_number=9346)
 with open('/tmp/current_issue.pkl', 'wb') as f:
     pickle.dump(current_issue, f)
-scheduler.add_job(func=cron, trigger="interval", seconds=30) # hours=1
+#scheduler.add_job(func=cron, trigger="interval", seconds=30) # hours=1
 scheduler.start()
 
 dltime=dl_issue(current_issue.url) # download and extract the issue
 counter, sizecounter, podcasts = build_json(base_podcasts)
 
 filesize_mb=sizecounter/1024/1024
-print('Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
+print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
 
 #app.run()
-
-
-#
-# 4. finally we serve the rss using a template
-#
-
-
