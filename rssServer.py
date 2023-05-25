@@ -229,7 +229,7 @@ scheduler = APScheduler()
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown())
 
-@scheduler.task('interval', id='cron', seconds=30, misfire_grace_time=900)
+@scheduler.task('interval', id='cron', hours=1, misfire_grace_time=900)
 def cron():
     try:
         with open('/tmp/current_issue.pkl', 'rb') as f:
