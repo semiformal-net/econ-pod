@@ -6,7 +6,7 @@ The server scans the `/app/static/podcast1/audios` on start and serves all the m
 
 ## Requirements
 
-Python, Flask and gunicorn. See `requirements.txt`
+Python, Flask, requests and gunicorn. See `requirements.txt`
 
 ## Quick start
 
@@ -18,6 +18,29 @@ docker run -it -p 5500:5500 -e BASE_URL=https://myrss.com/ econpod
 ```
 
 Now point your podcasting software to `BASE_URL/podcast1/rss`
+
+## Notification
+
+The script will push notifications to a gotify server defined using `GOTIFY_HOST` and `GOTIFY_TOKEN`. An example in docker compose is,
+
+```
+  econpod:
+    build: ./econ-pod
+    container_name: econpod
+    environment:
+      - BASE_URL=https://host.net/econpod/
+      - GOTIFY_HOST=https://gotify.host.net
+    env_file: secret_gotify.env
+    ports:
+      - 5500:5500
+    restart: unless-stopped
+```
+
+Where `secret_gotify.env` contains,
+
+```
+GOTIFY_TOKEN: alkja3ra3f3AFQa
+```
 
 ## Credit
 
