@@ -23,6 +23,14 @@ import requests
 baseUrl = os.getenv('BASE_URL')
 if baseUrl is None:
     baseUrl='http://127.0.0.1:5500/'
+gotify_host = os.getenv('GOTIFY_HOST')
+if gotify_host is None:
+    gotify_host='http://127.0.0.1:8008'
+gotify_host=gotify_host.rstrip('/') # no trailing slash
+gotify_token = os.getenv('GOTIFY_TOKEN')
+if gotify_token is None:
+    gotify_token='SeCrEt'
+
 
 # set configuration values
 class Config:
@@ -220,9 +228,7 @@ def build_json(base_json):
     return counter, sizecounter, podcasts
 
 def gotify_push(msg):
-    host='https://gotify.host.com' # no trailing slash
-    token='A6ztifhsaj2AAS8n'
-    resp = requests.post('{}/message?token={}'.format(host,token), json={
+    resp = requests.post('{}/message?token={}'.format(gotify_host,gotify_token), json={
         "message": msg, # completely uncechked input
         "priority": 2,
         "title": "Econpod"
@@ -281,7 +287,7 @@ def rss(podcast):
 scheduler.init_app(app)
 
 current_issue = init_current_issue()
-current_issue=Podcast(publication_date=datetime.datetime( 2023,5,13,0,0,0 ), is_published=True, issue_number=9346)
+#current_issue=Podcast(publication_date=datetime.datetime( 2023,5,13,0,0,0 ), is_published=True, issue_number=9346)
 with open('/tmp/current_issue.pkl', 'wb') as f:
     pickle.dump(current_issue, f)
 #scheduler.add_job(func=cron, trigger="interval", seconds=30) # hours=1
