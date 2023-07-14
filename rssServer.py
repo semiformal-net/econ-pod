@@ -228,11 +228,14 @@ def build_json(base_json):
     return counter, sizecounter, podcasts
 
 def gotify_push(msg):
-    resp = requests.post('{}/message?token={}'.format(gotify_host,gotify_token), json={
+    try:
+        resp = requests.post('{}/message?token={}'.format(gotify_host,gotify_token), json={
         "message": msg, # completely uncechked input
         "priority": 2,
-        "title": "Econpod"
-    })
+        "title": "Econpod"})
+    except requests.exceptions.RequestException as e:
+        print('Failed to push notification to {}'.format(gotify_host))
+        print(e)
 #
 # END FUNCTIONS ---------------------------------------------------------------------------
 #
