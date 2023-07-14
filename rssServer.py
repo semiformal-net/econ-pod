@@ -13,6 +13,7 @@ import pickle
 #from apscheduler.schedulers.background import BackgroundScheduler
 from flask_apscheduler import APScheduler
 import atexit
+import requests
 
 #
 # CONSTANTS
@@ -218,6 +219,14 @@ def build_json(base_json):
     podcasts['podcasts']['podcast1']['audios'] = audios
     return counter, sizecounter, podcasts
 
+def gotify_push(msg):
+    host='https://gotify.host.com' # no trailing slash
+    token='A6ztifhsaj2AAS8n'
+    resp = requests.post('{}/message?token={}'.format(host,token), json={
+        "message": msg, # completely uncechked input
+        "priority": 2,
+        "title": "Econpod"
+    })
 #
 # END FUNCTIONS ---------------------------------------------------------------------------
 #
@@ -246,6 +255,8 @@ def cron():
     ready=n.issue_ready()
     print( '\t [] Next issue: {0}, (ready={1})'.format( n.publication_date,ready ) )
 
+    gotify_push('Check for {}; is ready={}'.format(n.publication_date,ready))
+
     if n.is_published:
         with open('/tmp/current_issue.pkl', 'wb') as f:
             pickle.dump(n, f)
@@ -256,6 +267,7 @@ def cron():
 
         filesize_mb=sizecounter/1024/1024
         print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
+        gotify_push('New episode ({}) is ready!'.format(current_issue.publication_date))
 
 @app.route('/<podcast>/rss')
 def rss(podcast):
@@ -280,5 +292,7 @@ counter, sizecounter, podcasts = build_json(base_podcasts)
 
 filesize_mb=sizecounter/1024/1024
 print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
+
+gotify_push('New episode ({}) is ready!'.format(current_issue.publication_date))
 
 #app.run()
