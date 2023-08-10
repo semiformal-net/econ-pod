@@ -104,8 +104,12 @@ def next_issue(current_issue):
         return None
     saturdays=pd.date_range(current_issue.publication_date , current_issue.publication_date + datetime.timedelta(21) ,freq='W-SAT') # a list of saturdays, starting with current issue
 
+    now=datetime.datetime.now()
+
     i=1
-    while same_week_as_xmas(saturdays[i]):
+    # if the saturday occurs on the week of xmas, or if the saturday occurs in the past, then skip
+    # Econ skips an issue in the summer
+    while (same_week_as_xmas(saturdays[i]) or (now-saturdays[i]).days > 0 ):
         i=i+1
 
     next_issue = Podcast(publication_date=saturdays[i], is_published=False, issue_number=current_issue.issue_number+1)
@@ -188,7 +192,7 @@ def build_issues(schedule_day):
     return issues
 
 def find_valid_issue(schedule_day,issues):
-    for i in list(zip( schedule_day[:-3:-1], issues[:-3:-1])): # last two items in list, in reverse order
+    for i in list(zip( schedule_day[:-4:-1], issues[:-4:-1])): # last three (!) items in list, in reverse order
         ready, issuezip=issue_ready(i[0],i[1])
         if ready:
             return i,issuezip
