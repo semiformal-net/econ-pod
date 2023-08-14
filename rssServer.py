@@ -185,7 +185,7 @@ def build_issues(schedule_day):
         day = i.strftime('%d')
         date = i.strftime('%Y%m%d')
         issue = 8766+weeks
-        issue = issue - 1 # issue got out of sync
+        issue = issue - 2 # issue got out of sync
         issues.append(issue)
         if (int(month) != 12) or (int(day) < 25): # no issue near xmas
             weeks=weeks+1
