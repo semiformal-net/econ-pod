@@ -4,6 +4,7 @@ COPY requirements.txt /
 RUN pip3 install -r /requirements.txt
 COPY requirements.txt /app/
 COPY rssServer.py /app/
+COPY libeconpod.py /app/
 COPY gunicorn_starter.sh /app/
 COPY templates /app/templates
 COPY static /app/static

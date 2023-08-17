@@ -14,10 +14,21 @@ Build the container and set the BASE_URL environment variable to suit your netwo
 
 ```
 docker build -t econpod .
-docker run -it -p 5500:5500 -e BASE_URL=https://myrss.com/ econpod
+docker run -it -p 5500:5500 -e BASE_URL=https://myrss.com/ -v /tmp/data:/data econpod
 ```
 
 Now point your podcasting software to `BASE_URL/podcast1/rss`
+
+## State
+
+This app stores its state in a pickle file in /data. The state contains the data and issue number of a valid issue. The app will start from there and look for a new issue. The app is capable of a cold start if it does not find the right file, but the cold start logic may be flawed. To manually warm start you can try,
+
+```
+current_issue=Podcast(publication_date=datetime.datetime( 2023,5,13,0,0,0 ), is_published=True, issue_number=9346)
+put_current_issue_to_db(current_issue)
+```
+
+Using a recent valid issue number and date.
 
 ## Notification
 
