@@ -103,9 +103,11 @@ def get_current_issue_from_db():
     #
 
     if not os.path.isfile(PICKLE_PATH):
+        print('[*] Warning: state file {} does not exist'.format(PICKLE_PATH))
         return None
 
     if not os.access(PICKLE_PATH, os.R_OK):
+        print('[*] Warning: state file {} cannot be read'.format(PICKLE_PATH))
         return None
 
     with open(PICKLE_PATH, 'rb') as f:
