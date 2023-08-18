@@ -134,18 +134,55 @@ def same_week_as_xmas(date):
 def next_issue(current_issue):
     if not isinstance(current_issue, Podcast):
         return None
-    saturdays=pd.date_range(current_issue.publication_date , current_issue.publication_date + datetime.timedelta(21) ,freq='W-SAT') # a list of saturdays, starting with current issue
 
     now=datetime.datetime.now()
 
-    i=1
-    # if the saturday occurs on the week of xmas, or if the saturday occurs in the past, then skip
-    # Econ skips an issue in the summer
-    # so in effect this will seek through saturdays looking for an issue
-    while (same_week_as_xmas(saturdays[i]) or (now-saturdays[i]).days > 0 ):
-        i=i+1
-    next_issue = Podcast(publication_date=saturdays[i], is_published=False, issue_number=current_issue.issue_number+1)
-    return next_issue
+    if now <= (current_issue.publication_date + datetime.timedelta(7)):
+        return Podcast(publication_date=current_issue.publication_date + datetime.timedelta(7), is_published=False, issue_number=current_issue.issue_number+1)
+    else:
+        # there are one or more saturdays between the current issue and the next issue, so scan. This can arise for two reasons:
+        #   - the 'current issue' is way out of date, perhaps because the app has an old state
+        #   - we are at one of the times of the year when econ skip an issue (xmas or summer break)
+        # to find out what is happening you have to do two passes:
+        #  1. test all of the possible saturdays
+        #  2. figure out which one to return
+
+        d = datetime.date.today()
+        t = datetime.timedelta((12 - d.weekday()) % 7)
+        if t.days == 0: # if today is a saturday jump ahead a week
+            t=datetime.timedelta(days=7)
+        next_next_next_saturday=d + t + datetime.timedelta(days=21)
+        saturdays=pd.date_range(current_issue.publication_date , next_next_next_saturday.strftime('%Y%m%d') ,freq='W-SAT') # a list of saturdays, starting with current issue, ending with saturday in about three weeks
+
+        issue_list=[]
+        i=1
+        base_issue_number=current_issue.issue_number+1
+        while ( i<len(saturdays) ):
+            next_issue = Podcast(publication_date=saturdays[i], is_published=False, issue_number=base_issue_number)
+            issue_list.append(next_issue)
+            ready=next_issue.issue_ready()
+            print('[DEBUG] Next issue ({}): {} || {}'.format(saturdays[i],ready,next_issue.url))
+            i=i+1
+            if ready:
+                # each time you encounter a valid issue, increment the issue number
+                base_issue_number=base_issue_number+1
+
+        # The last issue is published, return it
+        if issue_list[-1].is_published:
+            return issue_list[-1]
+
+        # all the tested issues are ready=False return the first upcoming one (after now())
+        i_ready=[ x.is_published for x in issue_list ]
+        if not all(i_ready):
+            dd=[ i for i in issue_list if i.publication_date>now ]
+            return dd[0]
+
+        # now it is weird. if a long time has past you can get a bunch of issues, some ready=True, some ready=False
+        # return the last one that is ready
+        dd=[ i for i in issue_list[::-1] if i.is_published ]
+        return dd[0]
+
+    return None
 
 def init_current_issue():
 

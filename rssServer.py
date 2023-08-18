@@ -10,7 +10,7 @@ atexit.register(lambda: scheduler.shutdown())
 @scheduler.task('interval', id='cron', hours=1, misfire_grace_time=900)
 def cron():
     try:
-        current_issue = init_current_issue()
+        current_issue=get_current_issue_from_db()
     except:
         print('unable to load current issue from DB')
     if not isinstance(current_issue, Podcast):
@@ -20,7 +20,9 @@ def cron():
 
     print('\t [] Current issue: {0}, (ready={1})'.format( current_issue.publication_date,current_issue.is_published) )
     n=next_issue(current_issue)
-    ready=n.issue_ready()
+    # if its false it may or may not have been checked. If it is True then it definitely has been checked and you don't have to recehck'
+    if not n.is_published:
+        ready=n.issue_ready()
     print( '\t [] Next issue: {0}, (ready={1})'.format( n.publication_date,ready ) )
 
     if n.is_published:
@@ -46,12 +48,11 @@ def rss(podcast):
 scheduler.init_app(app)
 
 current_issue = init_current_issue()
+# DEBUG force warm start with old issue
 #current_issue=Podcast(publication_date=datetime.datetime( 2023,5,13,0,0,0 ), is_published=True, issue_number=9346)
 put_current_issue_to_db(current_issue)
 #scheduler.add_job(func=cron, trigger="interval", seconds=30) # hours=1
 scheduler.start()
-
-sys.exit(1)
 
 dltime=dl_issue(current_issue.url) # download and extract the issue
 counter, sizecounter, podcasts = build_json(base_podcasts)
