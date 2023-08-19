@@ -1,4 +1,5 @@
 from libeconpod import *
+import jinja2
 
 app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
 app.config.from_object(Config())
@@ -56,6 +57,15 @@ scheduler.start()
 
 dltime=dl_issue(current_issue.url) # download and extract the issue
 counter, sizecounter, podcasts = build_json(base_podcasts)
+
+# write a copy of the rss feed to a file
+templateLoader = jinja2.FileSystemLoader(searchpath="./templates/")
+templateEnv = jinja2.Environment(loader=templateLoader)
+TEMPLATE_FILE = "base.xml"
+template = templateEnv.get_template(TEMPLATE_FILE)
+rendered = template.render(podcast=podcasts['podcasts']['podcast1'], baseUrl=podcasts['baseUrl'])
+with open('/app/static/podcast1/feed','w') as f:
+    f.write(rendered)
 
 filesize_mb=sizecounter/1024/1024
 print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
