@@ -1,6 +1,5 @@
 from libeconpod import *
 import jinja2
-import shutil
 
 app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
 app.config.from_object(Config())
