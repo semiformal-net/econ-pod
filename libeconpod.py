@@ -23,14 +23,14 @@ import requests
 ###############################################################
 
 
-#docker
+#prod
 PICKLE_PATH='/data/current_issue.pkl'
 # base for audio files, jpg, feed, etc.
 PODCAST_BASE_PATH='/app/static/'
 
 #debug
-PICKLE_PATH='/tmp/econpoddata/current_issue.pkl'
-PODCAST_BASE_PATH='/tmp/econpodstatic/'
+#PICKLE_PATH='/tmp/econpoddata/current_issue.pkl'
+#PODCAST_BASE_PATH='/tmp/econpodstatic/'
 
 LOGO_PATH='static/economist_logo.png'
 baseUrl = os.getenv('BASE_URL')
