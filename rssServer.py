@@ -37,7 +37,7 @@ def cron():
 
         filesize_mb=sizecounter/1024/1024
         print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
-        shutil.copyfile(LOGO_PATH, os.path.join(PODCAST_BASE_PATH,LOGO_PATH))
+        #shutil.copyfile(LOGO_PATH, os.path.join(PODCAST_BASE_PATH,os.path.split(LOGO_PATH)[-1]))
         gotify_push('New episode ({}) is ready!'.format(n.publication_date.strftime("%Y/%m/%d")))
 
 @app.route('/<podcast>/rss')
@@ -73,7 +73,7 @@ with open(os.path.join(PODCAST_BASE_PATH,'feed'),'w') as f:
 
 filesize_mb=sizecounter/1024/1024
 print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
-shutil.copyfile(LOGO_PATH, os.path.join(PODCAST_BASE_PATH,LOGO_PATH))
+#shutil.copyfile(LOGO_PATH, os.path.join(PODCAST_BASE_PATH,os.path.split(LOGO_PATH)[-1]))
 gotify_push('New episode ({}) is ready!'.format(current_issue.publication_date.strftime("%Y/%m/%d")))
 
 #app.run()
