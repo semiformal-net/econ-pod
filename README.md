@@ -52,6 +52,20 @@ Where `secret_gotify.env` contains,
 ```
 GOTIFY_TOKEN: alkja3ra3f3AFQa
 ```
+## Serving as static site
+
+The path `/app/static/` inside the container contains the following:
+
+```
+/feed             	# an rss file to serve the content
+/audios
+/audios/001...    	# the mp3 files for the issue
+/audios/002...
+...
+/economist_logo.png 	# the podcast logo
+```
+
+This can be used to serve the podcast as a static site, just dump this onto a server (and configure `BASE_URL` as required).
 
 ## Credit
 
