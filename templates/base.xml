@@ -21,8 +21,8 @@
          <author>{{ podcast['contactEmail'] }} ({{ podcast['author'] }})</author>
          <description>{{ audio['description'] }}</description>
          <pubDate>{{ audio['date'] }}</pubDate>
-         <enclosure url= "{{ baseUrl + podcast['audiosFolder'] + audio['filename'] }}" type="audio/mpeg" length="{{ audio['length'] }}" />
-         <guid isPermaLink="true">{{ baseUrl + podcast['audiosFolder'] + audio['filename'] }}</guid>
+	 <enclosure url= "{{ baseUrl + 'audios/' + audio['filename'] }}" type="audio/mpeg" length="{{ audio['length'] }}" />
+	 <guid isPermaLink="true">{{ baseUrl + 'audios/' + audio['filename'] }}</guid>
       </item>
       {% endfor %}
    </channel>

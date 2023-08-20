@@ -22,7 +22,17 @@ import requests
 #
 ###############################################################
 
+
+#docker
 PICKLE_PATH='/data/current_issue.pkl'
+# base for audio files, jpg, feed, etc.
+PODCAST_BASE_PATH='/app/static/'
+
+#debug
+PICKLE_PATH='/tmp/econpoddata/current_issue.pkl'
+PODCAST_BASE_PATH='/tmp/econpodstatic/'
+
+LOGO_PATH='static/economist_logo.png'
 baseUrl = os.getenv('BASE_URL')
 if baseUrl is None:
     baseUrl='http://127.0.0.1:5500/'
@@ -76,19 +86,16 @@ class Podcast:
 
 base_podcasts={
 "baseUrl" : baseUrl,
-"podcasts" : {
-    "podcast1" : {
-    "title": "podcast1",
-    "author" : "podcast1",
-    "contactEmail" : "podcast@podcast.com",
-    "contactName" : "Podcaster name",
-    "description" : "podcast1 description",
+"podcast" : {
+    "title": "econpod",
+    "author" : "stickygecko",
+    "contactEmail" : "econpod@podcast.com",
+    "contactName" : "Anonymous",
+    "description" : "The current audio edition of the Economist",
     "languaje" : "en-us",
-    "coverFilename" : "podcast1/economist_logo.png",
-    "rssUrl" : "podcast1/rss",
-    "audiosFolder" : "podcast1/audios/"
-    }
-    }
+    "coverFilename" : "economist_logo.png",
+    "rssUrl" : "feed"
+}
 }
 
 ###############################################################
@@ -213,7 +220,7 @@ def dl_issue(issuezip):
     # unzip on the fly
     with urlopen(issuezip) as zipresp:
         with ZipFile(BytesIO(zipresp.read())) as zfile:
-            zfile.extractall('/app/static/podcast1/audios') # put unzipped files into the podcast static dir
+            zfile.extractall(os.path.join(PODCAST_BASE_PATH,'audios')) # put unzipped files into the podcast static dir
 
     now2 = datetime.datetime.now()
     dltime=(now2-now).total_seconds()
@@ -281,7 +288,7 @@ def find_valid_issue(schedule_day,issues):
 def build_json(base_json):
     podcasts = base_json # copy
     audios=[]
-    adir='static/'+podcasts['podcasts']['podcast1']['audiosFolder']
+    adir=os.path.join(PODCAST_BASE_PATH,'audios')
     counter=0
     sizecounter=0
     # iterate over files in that directory
@@ -305,7 +312,7 @@ def build_json(base_json):
             counter=counter+1
             sizecounter=sizecounter+os.path.getsize(f)
 
-    podcasts['podcasts']['podcast1']['audios'] = audios
+    podcasts['podcast']['audios'] = audios
     return counter, sizecounter, podcasts
 
 def gotify_push(msg):
@@ -317,6 +324,16 @@ def gotify_push(msg):
     except requests.exceptions.RequestException as e:
         print('Failed to push notification to {}'.format(gotify_host))
         print(e)
+
+def delete_files_in_directory(directory_path):
+   try:
+     with os.scandir(directory_path) as entries:
+       for entry in entries:
+         if entry.is_file():
+            os.unlink(entry.path)
+   except OSError:
+     print("Error occurred while deleting files.")
+
 #
 # END FUNCTIONS ---------------------------------------------------------------------------
 #

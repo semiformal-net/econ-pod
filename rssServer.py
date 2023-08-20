@@ -1,5 +1,6 @@
 from libeconpod import *
 import jinja2
+import shutil
 
 app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
 app.config.from_object(Config())
@@ -28,18 +29,21 @@ def cron():
 
     if n.is_published:
         put_current_issue_to_db(n)
-        os.system('rm -rf /app/static/podcast1/audios/*') # assume unix host
+        delete_files_in_directory(os.path.join(PODCAST_BASE_PATH,'audios'))
+        #os.system('rm -rf /app/static/podcast1/audios/*') # assume unix host
         dltime=dl_issue(n.url) # download and extract the issue
         # I don't get how the main flask app has the context of podcasts but this seems to work?'
         counter, sizecounter, podcasts = build_json(base_podcasts)
 
         filesize_mb=sizecounter/1024/1024
         print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
+        shutil.copyfile(LOGO_PATH, os.path.join(PODCAST_BASE_PATH,LOGO_PATH))
         gotify_push('New episode ({}) is ready!'.format(n.publication_date.strftime("%Y/%m/%d")))
 
 @app.route('/<podcast>/rss')
 def rss(podcast):
-    template =  render_template('base.xml', podcast=podcasts['podcasts'][podcast], baseUrl=podcasts['baseUrl'])
+    # note that the <podcast> arguement is ignored, but allowed for backward compatibility
+    template =  render_template('base.xml', podcast=podcasts['podcast'], baseUrl=podcasts['baseUrl'])
     response = make_response(template)
     response.headers['Content-Type'] = 'application/rss+xml'
     return response
@@ -63,13 +67,13 @@ templateLoader = jinja2.FileSystemLoader(searchpath="./templates/")
 templateEnv = jinja2.Environment(loader=templateLoader)
 TEMPLATE_FILE = "base.xml"
 template = templateEnv.get_template(TEMPLATE_FILE)
-rendered = template.render(podcast=podcasts['podcasts']['podcast1'], baseUrl=podcasts['baseUrl'])
-with open('/app/static/podcast1/feed','w') as f:
+rendered = template.render(podcast=podcasts['podcast'], baseUrl=podcasts['baseUrl'])
+with open(os.path.join(PODCAST_BASE_PATH,'feed'),'w') as f:
     f.write(rendered)
 
 filesize_mb=sizecounter/1024/1024
 print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
-
+shutil.copyfile(LOGO_PATH, os.path.join(PODCAST_BASE_PATH,LOGO_PATH))
 gotify_push('New episode ({}) is ready!'.format(current_issue.publication_date.strftime("%Y/%m/%d")))
 
 #app.run()
