@@ -47,6 +47,14 @@ def rss(podcast):
     response.headers['Content-Type'] = 'application/rss+xml'
     return response
 
+#
+# to manually check a current_issue.pkl file:
+#   from libeconpod import *
+#   current_issue=get_current_issue_from_db('/tmp/current_issue.pkl')
+#   print('Date: {}\nIssue: {}\nURL: {}'.format(current_issue.publication_date.date(),current_issue.issue_number,current_issue.url))
+#
+
+
 #if __name__ == "__main__":
 
 scheduler.init_app(app)

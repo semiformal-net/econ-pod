@@ -104,20 +104,20 @@ base_podcasts={
 #
 ###############################################################
 
-def get_current_issue_from_db():
+def get_current_issue_from_db(path=PICKLE_PATH):
     #
     # The rule is that the DB shall always store the last available (is_published=True) issue
     #
 
-    if not os.path.isfile(PICKLE_PATH):
-        print('[*] Warning: state file {} does not exist'.format(PICKLE_PATH))
+    if not os.path.isfile(path):
+        print('[*] Warning: state file {} does not exist'.format(path))
         return None
 
-    if not os.access(PICKLE_PATH, os.R_OK):
-        print('[*] Warning: state file {} cannot be read'.format(PICKLE_PATH))
+    if not os.access(path, os.R_OK):
+        print('[*] Warning: state file {} cannot be read'.format(path))
         return None
 
-    with open(PICKLE_PATH, 'rb') as f:
+    with open(path, 'rb') as f:
         current_issue=pickle.load(f)
     return current_issue
 
