@@ -2,8 +2,6 @@
 
 Podcast RSS server based in Python Flask server. This is meant to be run preiodically with cron. It builds a static directory containing recent Economist episodes and an rss feed.
 
-The server scans the `/app/static/podcast1/audios` on start and serves all the mp3s that it finds.
-
 ## Requirements
 
 Python & a web server. See `requirements.txt`
