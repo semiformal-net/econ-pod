@@ -16,21 +16,13 @@ from flask_apscheduler import APScheduler
 import atexit
 import requests
 
+
 ###############################################################
 #
 # CONSTANTS
 #
 ###############################################################
 
-
-#prod
-PICKLE_PATH='/data/current_issue.pkl'
-# base for audio files, jpg, feed, etc.
-PODCAST_BASE_PATH='/app/static/'
-
-#debug
-#PICKLE_PATH='/tmp/econpoddata/current_issue.pkl'
-#PODCAST_BASE_PATH='/tmp/econpodstatic/'
 
 LOGO_PATH='static/economist_logo.png'
 baseUrl = os.getenv('BASE_URL')
@@ -104,7 +96,7 @@ base_podcasts={
 #
 ###############################################################
 
-def get_current_issue_from_db(path=PICKLE_PATH):
+def get_current_issue_from_db(path):
     #
     # The rule is that the DB shall always store the last available (is_published=True) issue
     #
@@ -121,12 +113,12 @@ def get_current_issue_from_db(path=PICKLE_PATH):
         current_issue=pickle.load(f)
     return current_issue
 
-def put_current_issue_to_db(current_issue):
+def put_current_issue_to_db(current_issue,pth):
     #
     # The rule is that the DB shall always store the last available (is_published=True) issue
     #
 
-    with open(PICKLE_PATH, 'wb') as f:
+    with open(pth, 'wb') as f:
         pickle.dump(current_issue, f)
 
 def same_week_as_xmas(date):
@@ -168,8 +160,8 @@ def next_issue(current_issue):
         base_issue_number=current_issue.issue_number+1
         while ( i<len(saturdays) ):
             next_issue = Podcast(publication_date=saturdays[i], is_published=False, issue_number=base_issue_number)
-            issue_list.append(next_issue)
             ready=next_issue.issue_ready()
+            issue_list.append(next_issue)
             print('[DEBUG] Next issue ({}): {} || {}'.format(saturdays[i],ready,next_issue.url))
             i=i+1
             if ready:
@@ -182,7 +174,7 @@ def next_issue(current_issue):
 
         # all the tested issues are ready=False return the first upcoming one (after now())
         i_ready=[ x.is_published for x in issue_list ]
-        if not all(i_ready):
+        if not any(i_ready):
             dd=[ i for i in issue_list if i.publication_date>now ]
             return dd[0]
 
@@ -193,9 +185,9 @@ def next_issue(current_issue):
 
     return None
 
-def init_current_issue():
+def init_current_issue(pth):
 
-    current_issue=get_current_issue_from_db()
+    current_issue=get_current_issue_from_db(pth)
     if current_issue is None:
         # This is the cold start logic. If you are unable to warm start with a valid issue.
         schedule_day=build_schedule()
@@ -208,7 +200,7 @@ def init_current_issue():
 
     return current_issue
 
-def dl_issue(issuezip):
+def dl_issue(issuezip,pth):
 
     #
     # assumes that url has been checked
@@ -218,9 +210,12 @@ def dl_issue(issuezip):
     print('[*] Fetching {}'.format(issuezip))
 
     # unzip on the fly
-    with urlopen(issuezip) as zipresp:
-        with ZipFile(BytesIO(zipresp.read())) as zfile:
-            zfile.extractall(os.path.join(PODCAST_BASE_PATH,'audios')) # put unzipped files into the podcast static dir
+    try:
+        with urlopen(issuezip) as zipresp:
+            with ZipFile(BytesIO(zipresp.read())) as zfile:
+                zfile.extractall(os.path.join(pth,'audios')) # put unzipped files into the podcast static dir
+    except:
+        return None
 
     now2 = datetime.datetime.now()
     dltime=(now2-now).total_seconds()
@@ -285,10 +280,10 @@ def find_valid_issue(schedule_day,issues):
         print("Error: Unable to get an issue")
     sys.exit(4)
 
-def build_json(base_json):
+def build_json(base_json,pth):
     podcasts = base_json # copy
     audios=[]
-    adir=os.path.join(PODCAST_BASE_PATH,'audios')
+    adir=os.path.join(pth,'audios')
     counter=0
     sizecounter=0
     # iterate over files in that directory

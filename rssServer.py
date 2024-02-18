@@ -1,43 +1,96 @@
 from libeconpod import *
 import jinja2
 
+#prod
+PICKLE_PATH='/data/current_issue.pkl'
+# base for audio files, jpg, feed, etc.
+PODCAST_BASE_PATH='/app/static/'
+
+#debug
+#PICKLE_PATH='/tmp/econpoddata/current_issue.pkl'
+#PODCAST_BASE_PATH='/tmp/econpodstatic/'
+
+
 app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
 app.config.from_object(Config())
 
 scheduler = APScheduler()
+from apscheduler.events import EVENT_JOB_ERROR
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown())
 
-@scheduler.task('interval', id='cron', hours=1, misfire_grace_time=900)
+def listener(event):
+    print(f'Job {event.job_id} raised {event.exception.__class__.__name__}')
+
+scheduler.add_listener(listener, EVENT_JOB_ERROR)
+
+@scheduler.task('interval', id='cron', minutes=1, misfire_grace_time=900)
 def cron():
+    print( '[*] Scheduled check ({}) ...'.format(datetime.datetime.now()) )
+
     try:
         current_issue=get_current_issue_from_db()
     except:
         print('unable to load current issue from DB')
+        return
     if not isinstance(current_issue, Podcast):
         print('cron got bad data')
-
-    print( '[*] Scheduled check ({}) ...'.format(datetime.datetime.now()) )
+        return
 
     print('\t [] Current issue: {0}, (ready={1})'.format( current_issue.publication_date,current_issue.is_published) )
-    n=next_issue(current_issue)
+    try:
+        n=next_issue(current_issue)
+    except:
+        print('cron got bad data')
+        return
+    if not isinstance(current_issue, Podcast):
+        print('cron got bad data')
+        return
+
+    print( '\t [] Next issue: {0}, (ready={1})'.format( n.publication_date,ready ) )
+
     # if its false it may or may not have been checked. If it is True then it definitely has been checked and you don't have to recehck'
     if not n.is_published:
         ready=n.issue_ready()
-    print( '\t [] Next issue: {0}, (ready={1})'.format( n.publication_date,ready ) )
 
     if n.is_published:
-        put_current_issue_to_db(n)
-        delete_files_in_directory(os.path.join(PODCAST_BASE_PATH,'audios'))
+        try:
+            dltime=dl_issue(n.url) # download and extract the issue
+        except:
+            print('failed to download')
+            return
+        if dltime is None:
+            print('[!] Failed to download.')
+            return
+
+        try:
+            put_current_issue_to_db(n)
+        except:
+            print('error updating DB')
+            return
+
+        try:
+            delete_files_in_directory(os.path.join(PODCAST_BASE_PATH,'audios'))
+        except:
+            print('unable to purge old episodes')
+            return
         #os.system('rm -rf /app/static/podcast1/audios/*') # assume unix host
-        dltime=dl_issue(n.url) # download and extract the issue
+
         # I don't get how the main flask app has the context of podcasts but this seems to work?'
-        counter, sizecounter, podcasts = build_json(base_podcasts)
+        try:
+            counter, sizecounter, podcasts = build_json(base_podcasts)
+        except:
+            print('failed to build json')
+            return
 
         filesize_mb=sizecounter/1024/1024
         print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
         #shutil.copyfile(LOGO_PATH, os.path.join(PODCAST_BASE_PATH,os.path.split(LOGO_PATH)[-1]))
-        gotify_push('New episode ({}) is ready!'.format(n.publication_date.strftime("%Y/%m/%d")))
+
+        try:
+            gotify_push('New episode ({}) is ready!'.format(n.publication_date.strftime("%Y/%m/%d")))
+        except:
+            print('gotify push failed')
 
 @app.route('/<podcast>/rss')
 def rss(podcast):
