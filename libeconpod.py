@@ -1,9 +1,7 @@
-from flask import Flask, render_template, make_response, send_from_directory, send_file, url_for
 import json
 import os
 import sys
 import datetime
-import sqlite3
 import pandas as pd
 # for zip file download and extract
 from urllib.request import urlopen
@@ -11,30 +9,16 @@ from urllib.error import HTTPError
 from zipfile import ZipFile
 from io import BytesIO
 import pickle
-#from apscheduler.schedulers.background import BackgroundScheduler
-from flask_apscheduler import APScheduler
-import atexit
 import requests
-
-
-###############################################################
-#
-# CONSTANTS
-#
-###############################################################
-
-
-LOGO_PATH='static/economist_logo.png'
-baseUrl = os.getenv('BASE_URL')
-if baseUrl is None:
-    baseUrl='http://127.0.0.1:5500/'
-gotify_host = os.getenv('GOTIFY_HOST')
-if gotify_host is None:
-    gotify_host='http://127.0.0.1:8008'
-gotify_host=gotify_host.rstrip('/') # no trailing slash
-gotify_token = os.getenv('GOTIFY_TOKEN')
-if gotify_token is None:
-    gotify_token='SeCrEt'
+import glob
+import jinja2
+# for Email
+from email import encoders
+from email import utils # rfc 822
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import smtplib
 
 ###############################################################
 #
@@ -42,16 +26,14 @@ if gotify_token is None:
 #
 ###############################################################
 
-# set configuration values
-class Config:
-    SCHEDULER_API_ENABLED = True
-
 class Podcast:
     def __init__(self, publication_date=None, is_published: bool=False, issue_number: int=0):
         self.url = self.date_issue_to_url(publication_date,issue_number)
         self.publication_date = publication_date
         self.is_published = is_published
         self.issue_number = issue_number
+        self.articles=0
+        self.totalsize=0
 
     def date_issue_to_url(self,date,issue):
         year = date.strftime('%Y')
@@ -76,25 +58,68 @@ class Podcast:
 
         return self.is_published
 
-base_podcasts={
-"baseUrl" : baseUrl,
-"podcast" : {
-    "title": "econpod",
-    "author" : "stickygecko",
-    "contactEmail" : "econpod@podcast.com",
-    "contactName" : "Anonymous",
-    "description" : "The current audio edition of the Economist",
-    "languaje" : "en-us",
-    "coverFilename" : "economist_logo.png",
-    "rssUrl" : "feed"
-}
-}
+    def __eq__(self, other):
+        # for use with `current_issue == another_issue` tests
+        return self.__dict__ == other.__dict__
+    def __str__(self):
+        # allows print(current_issue)
+        return 'Issue {} ({}): published={}\n\t{:.1f} MB ({} files)'.format(self.issue_number, self.publication_date, self.is_published, self.totalsize/1024/1024, self.articles)
+
+class FastmailSMTP(smtplib.SMTP_SSL):
+    """A wrapper for handling SMTP connections to Fastmail."""
+
+    def __init__(self, username, password):
+        super().__init__('mail.messagingengine.com', port=465)
+        self.login(username, password)
+
+    def send_message(self, *,
+                     from_addr,
+                     to_addrs,
+                     msg,
+                     subject,
+                     attachments=None):
+        msg_root = MIMEMultipart()
+        msg_root['Subject'] = subject
+        msg_root['From'] = from_addr
+        msg_root['To'] = ', '.join(to_addrs)
+
+        msg_alternative = MIMEMultipart('alternative')
+        msg_root.attach(msg_alternative)
+        msg_alternative.attach(MIMEText(msg))
+
+        if attachments:
+            for attachment in attachments:
+                prt = MIMEBase('application', "octet-stream")
+                prt.set_payload(open(attachment, "rb").read())
+                encoders.encode_base64(prt)
+                prt.add_header(
+                    'Content-Disposition', 'attachment; filename="%s"'
+                    % attachment.replace('"', ''))
+                msg_root.attach(prt)
+
+        self.sendmail(from_addr, to_addrs, msg_root.as_string())
+
 
 ###############################################################
 #
 # FUNCTIONS
 #
 ###############################################################
+
+def base_podcasts(baseurl):
+    return {
+    "baseUrl" : baseurl,
+    "podcast" : {
+        "title": "econpod",
+        "author" : "stickygecko",
+        "contactEmail" : "econpod@podcast.com",
+        "contactName" : "Anonymous",
+        "description" : "The current audio edition of the Economist",
+        "languaje" : "en-us",
+        "coverFilename" : "economist_logo.png",
+        "rssUrl" : "feed"
+                }
+    }
 
 def get_current_issue_from_db(path):
     #
@@ -120,17 +145,6 @@ def put_current_issue_to_db(current_issue,pth):
 
     with open(pth, 'wb') as f:
         pickle.dump(current_issue, f)
-
-def same_week_as_xmas(date):
-    # Get the week number of Christmas for the given year
-    xmas_year = date.year
-    xmas_week_num = datetime.date(xmas_year, 12, 25).isocalendar()[1]
-
-    # Get the week number of the given date
-    input_week_num = date.isocalendar()[1]
-
-    # Check if the week numbers are the same
-    return input_week_num == xmas_week_num
 
 def next_issue(current_issue):
     if not isinstance(current_issue, Podcast):
@@ -162,7 +176,7 @@ def next_issue(current_issue):
             next_issue = Podcast(publication_date=saturdays[i], is_published=False, issue_number=base_issue_number)
             ready=next_issue.issue_ready()
             issue_list.append(next_issue)
-            print('[DEBUG] Next issue ({}): {} || {}'.format(saturdays[i],ready,next_issue.url))
+            #print('[DEBUG] Next issue ({}): {} || {}'.format(saturdays[i],ready,next_issue.url))
             i=i+1
             if ready:
                 # each time you encounter a valid issue, increment the issue number
@@ -184,21 +198,6 @@ def next_issue(current_issue):
         return dd[0]
 
     return None
-
-def init_current_issue(pth):
-
-    current_issue=get_current_issue_from_db(pth)
-    if current_issue is None:
-        # This is the cold start logic. If you are unable to warm start with a valid issue.
-        schedule_day=build_schedule()
-        issues=build_issues(schedule_day)
-        valid_day, issuezip=find_valid_issue(schedule_day,issues) # the zip file to grab
-        current_issue = Podcast(publication_date=valid_day[0], is_published=True, issue_number=valid_day[1])
-        print('[*] Warning: Cold start, detected issue {} ({})'.format(current_issue.publication_date,current_issue.issue_number))
-    else:
-        print('Found issue {} ({}) in database, resuming'.format(current_issue.publication_date,current_issue.issue_number))
-
-    return current_issue
 
 def dl_issue(issuezip,pth):
 
@@ -252,36 +251,7 @@ def build_issues(schedule_day):
             weeks=weeks+1
     return issues
 
-def issue_ready(date,issue):
-    issue_ready=False
-    year = date.strftime('%Y')
-    month = date.strftime('%m')
-    day = date.strftime('%d')
-    date = date.strftime('%Y%m%d')
-
-    issuezip="http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date)
-    try:
-        a=urlopen(issuezip)
-    except HTTPError as e:
-        # "e" can be treated as a http.client.HTTPResponse object
-        pass #print('Error: fetching {}: {}'.format(issuezip,e))
-    else:
-        issue_ready=True
-
-    return issue_ready, issuezip
-
-def find_valid_issue(schedule_day,issues):
-    for i in list(zip( schedule_day[:-4:-1], issues[:-4:-1])): # last three (!) items in list, in reverse order
-        ready, issuezip=issue_ready(i[0],i[1])
-        if ready:
-            return i,issuezip
-
-    if not ready:
-        print("Error: Unable to get an issue")
-    sys.exit(4)
-
-def build_json(base_json,pth):
-    podcasts = base_json # copy
+def audiodir_scan(pth):
     audios=[]
     adir=os.path.join(pth,'audios')
     counter=0
@@ -296,29 +266,44 @@ def build_json(base_json,pth):
             # only process mp3s
             if not ext.lower() == '.mp3':
                 continue
+            # nudge the modified time _backward_ by a second sequentially. this way if the podcast client sorts by date (instead of by name, as recommended)
+            # then the articles will be in order
+            file_time=datetime.datetime.fromtimestamp(os.path.getmtime(f))  - datetime.timedelta(seconds=counter)
+            # date below should be RFC 822 format for atom spec.
             F={"title": pname,
             "description": pname,
             "filename":fname,
-            "date": datetime.datetime.fromtimestamp( os.path.getmtime(f) )
-                .strftime( "%a, %d %b %Y %H:%M:%S -05:00"),
+            "date": utils.format_datetime(file_time), #file_time.strftime( "%a, %d %b %Y %H:%M:%S -05:00"),
             "length": os.path.getsize(f)
             }
             audios.append(F)
             counter=counter+1
             sizecounter=sizecounter+os.path.getsize(f)
 
-    podcasts['podcast']['audios'] = audios
-    return counter, sizecounter, podcasts
+    return counter, sizecounter, audios
 
-def gotify_push(msg):
+def build_json(baseUrl,audios):
+    podcasts = base_podcasts(baseUrl)
+    podcasts['podcast']['audios'] = audios
+    return podcasts
+
+def gotify_push(gotify_host,gotify_token,msg):
     try:
         resp = requests.post('{}/message?token={}'.format(gotify_host,gotify_token), json={
         "message": msg, # completely uncechked input
         "priority": 2,
         "title": "Econpod"})
     except requests.exceptions.RequestException as e:
-        print('Failed to push notification to {}'.format(gotify_host))
+        print('[*] Warning: gotify failed to push notification to {}'.format(gotify_host))
         print(e)
+
+def email_push(user,pw,to,msg):
+    with FastmailSMTP(user, pw) as server:
+        server.send_message(from_addr='econpod@semiformal.net',
+                            to_addrs=to,
+                            msg=msg,
+                            subject=msg)
+
 
 def delete_files_in_directory(directory_path):
    try:
@@ -329,6 +314,144 @@ def delete_files_in_directory(directory_path):
    except OSError:
      print("Error occurred while deleting files.")
 
+def valid_podcast_available(pth):
+    if not os.path.isfile(os.path.join(pth,'feed')):
+        return False
+
+    if not os.path.isdir(os.path.join(pth,'audios')):
+        return False
+
+    mp3counter = len(glob.glob1(os.path.join(pth,'audios'),"*.mp3"))
+    if mp3counter<5:
+        return False
+
+    return True
+
+def publish(baseUrl,n,pth,jpth,tpth):
+    '''
+    baseUrl - the location where we are publishing
+    n - current_issue Podcast() instance
+    pth - the static/ base path which contains the audios/ directory
+    jpth - the path containing the jinja template for rss (ie, base.xml)
+    tpth - the filename of the jinja template to use ('base.xml')
+    '''
+
+    if not isinstance(n, Podcast):
+        print('[!] Error: publish() was not passed a valid issue')
+        return
+
+    if not os.path.isfile(os.path.join(jpth,tpth)):
+        print('[!] Error: publish() was not passed a valid jinja template')
+        return
+
+    try:
+        delete_files_in_directory(os.path.join(pth,'audios'))
+    except:
+        print('unable to purge old episodes')
+        return
+
+    try:
+        dltime=dl_issue(n.url,pth) # download and extract (to PODCAST_BASE_PATH/audios) the issue
+    except:
+        print('failed to download')
+        return
+    if dltime is None:
+        print('[!] Failed to download.')
+        return
+    try:
+        counter, sizecounter, audios=audiodir_scan(pth)
+        n.articles=counter
+        n.totalsize=sizecounter
+    except:
+        print('failed to scan audio dir')
+
+    try:
+        podcasts = build_json(baseUrl,audios)
+    except:
+        print('failed to build json')
+        return
+
+    filesize_mb=sizecounter/1024/1024
+    print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
+
+    # write a copy of the rss feed to a file
+    templateLoader = jinja2.FileSystemLoader(searchpath=jpth)
+    templateEnv = jinja2.Environment(loader=templateLoader)
+    template = templateEnv.get_template(tpth)
+    rendered = template.render(podcast=podcasts['podcast'], baseUrl=podcasts['baseUrl'])
+    with open(os.path.join(pth,'feed'),'w') as f:
+        f.write(rendered)
+
+def cold_start(PICKLE_PATH):
+    # This is the cold start logic. If you are unable to warm start with a valid issue.
+    #
+    # I wrote a bot that reports the current issue. If that is responding, we will trust it and use that issue.
+    # otherwise we can scan...
+
+    try:
+        r=requests.get('https://econpod-23523.ue.r.appspot.com') #econissuebot (Beep!)
+        if r.json()['success']:
+            print( '[DEBUG] econissuebot reports: {} ({})'.format(r.json()['issue'], r.json()['published_date']))
+        else:
+            print( '[!] Warning: econissuebot failed with: {}'.format(r.json()['error']))
+    except:
+        print('[!] Warning: econissuebot failed')
+
+    if r:
+        pubdate=datetime.datetime.strptime(r.json()['published_date'], '%a, %d %b %Y %X %Z')
+        # published date is the day the issue was released. the date on the mag cover is always (?) a saturday, so we have to advance the published date to the following saturday
+        t = datetime.timedelta((12 - pubdate.weekday()) % 7)
+        if t.days == 0: # if today is a saturday jump ahead a week
+            t=datetime.timedelta(days=7)
+        a=Podcast(publication_date=pubdate+t, issue_number=int(r.json()['issue']))
+        b=a.issue_ready()
+        if a.is_published == True:
+            current_issue=a
+            put_current_issue_to_db(current_issue,PICKLE_PATH)
+            print('[*] Warning: cold start, using econbot {} ({})'.format(current_issue.publication_date,current_issue.issue_number))
+            return current_issue
+
+    #
+    # if econbot isn't working do a scan
+    #
+    schedule_day=build_schedule()
+    issues=build_issues(schedule_day)
+    current_issue=None
+    for date,issue in list(zip( schedule_day[:-4:-1], issues[:-4:-1])):
+        a=Podcast(publication_date=date, issue_number=issue)
+        b=a.issue_ready()
+        if a.is_published == True:
+            current_issue=a
+            print('[*] Warning: Cold start, detected issue {} ({})'.format(current_issue.publication_date,current_issue.issue_number))
+            put_current_issue_to_db(current_issue,PICKLE_PATH)
+            return current_issue
+
+def get_secrets(secret_dict):
+    # secret dict is: { 'filename': 'prefix', 'filename2': 'prefix2' }
+    #  each file is a single line and contains the secret prefixed with the prefix and a colon(:),
+    #  { '/tmp/mysecret.txt': 'SMTPPASS' }
+    #  $ cat /tmp/mysecret.txt
+    #  SMTPPASS:sldkgj44rfj
+    secrets=[]
+    #
+    # get the gotify token from the secrets file
+    #
+    if len(secret_dict)==0:
+        return secrets
+    for i in secret_dict.keys():
+        if not os.path.isfile(i):
+            print('[*] Warning: unable to read {}'.format(i))
+            secrets.append('SeCrEt')
+        else:
+            with open(i,'r') as f:
+                r=f.readline()
+            rs=r.split(':')
+            if len(rs)==2 and rs[0]==secret_dict[i]:
+                secrets.append(r.split(':')[1].strip())
+            else:
+                print('[*] Warning: secret file {} missing prefix {}'.format(i,secret_dict[i]))
+                secrets.append('SeCrEt')
+    return secrets
 #
 # END FUNCTIONS ---------------------------------------------------------------------------
 #

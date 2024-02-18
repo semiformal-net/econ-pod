@@ -1,0 +1,49 @@
+#
+# config
+#
+import os
+
+#
+# Email. These people get emailed when a new episode is ready
+#
+EMAIL_NOTIFICATION=['me@mail.com','friend@mail.com']
+
+#
+# The local directory that is the base of the install.
+#
+APP_ROOT='/scratch/econpod-cron'
+
+#
+# the url from which the rss is served (see nginx config in README)
+#
+baseUrl='https://server.com/econpod/'
+
+#
+# Secret 1. a file which contains gotify token for notifications in the format:
+#           GOTIFY_TOKEN:sldkjgsldkgelkeg
+GOTIFY_TOKEN_SECRET='/scractch/secret-gotify.env'
+
+#
+# The gotify server to use to push notifications
+#
+gotify_host='https://gotify.server.com'
+
+#
+# Secret 2. a file which contains fastmail smtp token for email notifications in the format:
+#           RELAY_PASSWORD:sldkjgsldkgelkeg
+SMTP_SECRET='/scratch/secret-fastmail-smtp.env'
+
+#
+# Fastmail user for smtp login
+#
+smtp_user='me@mail.com'
+
+#
+# ---------------- Non-user config items (leave these alone) ----------------------------------------------
+#
+PICKLE_PATH=os.path.join(APP_ROOT,'data/current_issue.pkl')
+# base for audio files, jpg, feed, etc.
+PODCAST_BASE_PATH=os.path.join(APP_ROOT,'static/')
+JINJA_TEMPLATE_PATH='templates/'
+TEMPLATE_FILE = "base.xml" # this is the template file for producing an rss feed
+#LOGO_PATH='static/economist_logo.png'
