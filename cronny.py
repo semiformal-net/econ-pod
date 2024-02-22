@@ -60,7 +60,7 @@ if __name__ == "__main__":
 
     # config is no longer here, see config.py
 
-    if not os.path.isfile('config.py'):
+    if not os.path.isfile('./config.py'):
         print('[*] Error: unable to read {}'.format('config.py'))
         sys.exit(2)
 
