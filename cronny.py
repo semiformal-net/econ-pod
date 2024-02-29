@@ -60,8 +60,8 @@ if __name__ == "__main__":
 
     # config is no longer here, see config.py
 
-    if not os.path.isfile('./config.py'):
-        print('[*] Error: unable to read {}'.format('config.py'))
+    if not os.path.isfile(os.path.join(os.path.dirname(__file__), 'config.py') ):
+        print('[*] Error: unable to read {}'.format( os.path.join(os.path.dirname(__file__), 'config.py')  ))
         sys.exit(2)
 
     print('[Debug] Base url: {}'.format(baseUrl))
