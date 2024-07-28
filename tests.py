@@ -38,6 +38,7 @@ print('[!] DEBUG: secrets:  ',thesecrets)
 #
 #
 from libeconpod import gotify_push
+from config import gotify_host
 
 gotify_push(gotify_host,gotify_token,'Econpod (cron) test: {}'.format(current_issue.publication_date.strftime("%Y/%m/%d")))
 #
