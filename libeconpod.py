@@ -19,6 +19,11 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
+# MP3
+from mutagen.mp3 import MP3
+from mutagen.id3 import ID3, TIT2, TPE1, TALB, APIC
+from mutagen.id3 import ID3, ID3NoHeaderError, error
+import mutagen
 
 ###############################################################
 #
@@ -256,6 +261,7 @@ def audiodir_scan(pth):
     adir=os.path.join(pth,'audios')
     counter=0
     sizecounter=0
+    cover_found = False
     # iterate over files in that directory
     for filename in sorted(os.listdir( adir )):
         f = os.path.join(adir, filename)
@@ -452,6 +458,83 @@ def get_secrets(secret_dict):
                 print('[*] Warning: secret file {} missing prefix {}'.format(i,secret_dict[i]))
                 secrets.append('SeCrEt')
     return secrets
+
+#
+# SQL
+#
+def insert_zip_info(conn, filename, size, file_count):
+    cursor = conn.cursor()
+    cursor.execute('''
+        REPLACE INTO economist_zip_info (filename, size, file_count)
+        VALUES (?, ?, ?)
+    ''', (filename, size, file_count))
+    conn.commit()
+
+def extract_id3_info(conn, zip_filename, mp3_filename, id3_data):
+    cursor = conn.cursor()
+    cursor.execute('''
+        REPLACE INTO economist_article_info (zip_filename, mp3_filename, artist, album, title, duration, file_size)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (zip_filename, mp3_filename, id3_data['artist'], id3_data['album'], id3_data['title'], id3_data['duration'], id3_data['file_size']))
+    conn.commit()
+
+def insert_cover_info(conn, zip_filename, cover_path):
+    cursor = conn.cursor()
+    cursor.execute('''
+        REPLACE INTO economist_issue_covers (zip_filename, cover_path)
+        VALUES (?, ?)
+    ''', (zip_filename, cover_path))
+    conn.commit()
+
+def insert_url(conn, zip_filename, url):
+    cursor = conn.cursor()
+    cursor.execute('''
+        REPLACE INTO economist_urls (zip_filename, url)
+        VALUES (?, ?)
+    ''', (zip_filename, url))
+    conn.commit()
+
+def save_cover_art(cover_data, cover_dir, zip_filename):
+    if not os.path.exists(cover_dir):
+        os.makedirs(cover_dir)
+    cover_art_filename = f"{os.path.splitext(zip_filename)[0]}.jpg"
+    cover_art_path = os.path.join(cover_dir, cover_art_filename)
+    with open(cover_art_path, 'wb') as img_file:
+        img_file.write(cover_data)
+    return cover_art_path
+
+def sqldir_scan(pth,conn,current_issue):
+    audios=[]
+    adir=os.path.join(pth,'audios')
+    #cover_found = False
+    # iterate over files in that directory
+    for filename in sorted(os.listdir( adir )):
+        f = os.path.join(adir, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            fname=os.path.basename(f)
+            pname, ext = os.path.splitext(fname)
+            # only process mp3s
+            if not ext.lower() == '.mp3':
+                continue
+
+            mp3_data = MP3(f, ID3=ID3)
+            id3_data = {
+                'artist': mp3_data.get('TPE1', [''])[0],
+                'album': mp3_data.get('TALB', [''])[0],
+                'title': mp3_data.get('TIT2', [''])[0],
+                'duration': mp3_data.info.length,
+                'file_size': os.path.getsize(f)
+            }
+            # Check for cover art and stop if found
+            #if not cover_found and 'APIC:' in mp3_data:
+            #    cover_art = mp3_data['APIC:'].data
+            #    cover_art_path = save_cover_art(cover_art, '/tmp', os.path.basename(current_issue.url))
+            #    insert_cover_info(conn, os.path.basename(current_issue.url), cover_art_path)
+            #    cover_found = True
+
+            extract_id3_info(conn, os.path.basename(current_issue.url), filename, id3_data)
+
 #
 # END FUNCTIONS ---------------------------------------------------------------------------
 #

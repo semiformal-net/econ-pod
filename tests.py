@@ -5,6 +5,8 @@ import os
 import glob
 import jinja2
 import random
+from sqlite3 import Error
+import sqlite3
 
 PICKLE_PATH='/tmp/current_issue.pkl'
 
@@ -172,3 +174,20 @@ except:
     print('[!] Error: publish failed')
 
 print(current_issue)
+
+from config import SQL_DB
+if len(SQL_DB)>0:
+    if os.path.isfile(SQL_DB):
+        conn = None
+        try:
+            conn = sqlite3.connect(SQL_DB)
+            print(f"Successfully Connected to SQLite Database: {SQL_DB}")
+        except Error as e:
+            print(f"[!] Error while connecting to database: {e}")
+        if conn:
+            for tbl in ['economist_zip_info','economist_article_info','economist_issue_covers','economist_urls']:
+                cursor = conn.cursor()
+                cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{tbl}';")
+                table_exists = cursor.fetchone()
+                if not table_exists:
+                    print(f"[!] Table not found in database: {tbl}")

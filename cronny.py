@@ -2,6 +2,7 @@ from config import *
 from libeconpod import *
 import glob
 import requests
+import sqlite3
 
 def cron():
 
@@ -35,7 +36,7 @@ def cron():
     print('\t [] Current issue: {0}, (ready={1})'.format( current_issue.publication_date,current_issue.is_published) )
     n=next_issue(current_issue)
     # debug: use this to force an update
-    # n=current_issue
+    #n=current_issue
     # if its false it may or may not have been checked. If it is True then it definitely has been checked and you don't have to recehck'
     if not n.is_published:
         ready=n.issue_ready()
@@ -51,6 +52,17 @@ def cron():
         except:
             print('error updating DB')
             return
+
+        if len(SQL_DB)>0:
+            if os.path.isfile(SQL_DB):
+                try:
+                    conn = sqlite3.connect(SQL_DB)
+                    insert_zip_info(conn, n.url.split('/')[-1], n.totalsize, n.articles)
+                    # (re) scan the whole dir; the inner look in audioscan() doesn't have the zip name
+                    sqldir_scan(PODCAST_BASE_PATH,conn,n)
+                    insert_url(conn, n.url.split('/')[-1], n.url)
+                except:
+                    print('[*] SQL is unhappy!')
     else:
         if not valid_podcast_available(PODCAST_BASE_PATH):
             print('[*] Current issue does not appear to be available in {}'.format(PODCAST_BASE_PATH))
@@ -103,6 +115,24 @@ if __name__ == "__main__":
 
     print('pickle path',PICKLE_PATH)
 
+    # check that SQL is happy
+    if len(SQL_DB)>0:
+        if os.path.isfile(SQL_DB):
+            conn = None
+            try:
+                conn = sqlite3.connect(SQL_DB)
+            except Error as e:
+                print(f"[!] Error while connecting to database: {e}")
+                SQL_DB=''
+            if conn:
+                for tbl in ['economist_zip_info','economist_article_info','economist_issue_covers','economist_urls']:
+                    cursor = conn.cursor()
+                    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{tbl}';")
+                    table_exists = cursor.fetchone()
+                    if not table_exists:
+                        print(f"[!] Table not found in database: {tbl}")
+                        SQL_DB=''
+                conn.close()
 
     #z=Podcast(publication_date=datetime.datetime( 2023,9,30,0,0,0 ), is_published=True, issue_number=9365)
     #put_current_issue_to_db(z,PICKLE_PATH)
