@@ -13,9 +13,9 @@
       <atom:link href="{{ baseUrl.rstrip('/') }}/{{ podcast['rssUrl'] | urlencode }}" rel="self" type="application/rss+xml" />
       {% for audio in podcast['audios'] %}
       <item>
-         <title>{{ audio['title'] }}</title>
+         <title>{{ audio['title'] | e }}</title>
          <author>{{ podcast['contactEmail'] }} ({{ podcast['author'] }})</author>
-         <description>{{ audio['description'] }}</description>
+         <description>{{ audio['description'] | e }}</description>
          <pubDate>{{ audio['date'] }}</pubDate>
 	     <enclosure url="{{ baseUrl.rstrip('/') ~ '/audios' }}/{{ audio['filename'] | urlencode }}" type="audio/mpeg" length="{{ audio['length'] }}" />
 	     <guid isPermaLink="false">{{ range(9999999999999) | random }}</guid>
