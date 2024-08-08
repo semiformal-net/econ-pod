@@ -276,6 +276,10 @@ def audiodir_scan(pth):
             # then the articles will be in order
             file_time=datetime.datetime.fromtimestamp(os.path.getmtime(f))  - datetime.timedelta(seconds=counter)
             # date below should be RFC 822 format for atom spec.
+            # before saving titles, scrub out '&' and '<' which are not permitted in RSS (https://stackoverflow.com/questions/11783071/rss-feed-special-characters)
+            # filename gets cleaned up with urlencode by jinja (see template base.xml)
+            pname=pname.replace('&','&#x26;')
+            pname=pname.replace('<','&#x3C;')
             F={"title": pname,
             "description": pname,
             "filename":fname,
