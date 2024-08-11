@@ -166,8 +166,8 @@ if __name__ == "__main__":
                         SQL_ENABLED=True
                 conn.close()
 
-    z=Podcast(publication_date=datetime.datetime( 2023,9,30,0,0,0 ), is_published=True, issue_number=9365)
-    put_current_issue_to_db(z,PICKLE_PATH)
+    #z=Podcast(publication_date=datetime.datetime( 2023,9,30,0,0,0 ), is_published=True, issue_number=9365)
+    #put_current_issue_to_db(z,PICKLE_PATH)
     #sys.exit(5)
 
     cron()
