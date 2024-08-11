@@ -1,10 +1,10 @@
-# Simple Python Economist Podcast RSS Server
+# Economist Podcast RSS Server
 
-Podcast RSS server based in Python Flask server. This is meant to be run preiodically with cron. It builds a static directory containing recent Economist episodes and an rss feed.
+Podcast RSS server for the Economist audio edition. This serves the Economist audio edition as a standard rss feed so you can listen to it in your preferred podcast app.
 
 ## Requirements
 
-Python & a web server. See `requirements.txt`
+This is meant to be run periodically with cron. It builds a static directory containing recent Economist episodes and an rss feed and requires just Python & a web server. See `requirements.txt`
 
 ## Quick start
 
@@ -24,7 +24,7 @@ mkdir ${APP_ROOT}/data
 3. config cron with the absolute path of the .py files, and the base url as the arg
 
 ```
-* * * * 4,5 /home/econpod/econpod-cron/env/bin/python /home/econpod/econpod-cron/cronny.py >/dev/null 2>&1
+8 * * * 4,5 /home/econpod/econpod-cron/env/bin/python /home/econpod/econpod-cron/cronny.py >/dev/null 2>&1
 ```
 
 4. serve it!
@@ -39,7 +39,7 @@ location /ec/ {
 
 See `nginx.conf`.
 
-5. point podcast app to https://me.com/ec/feed ([baseUrl]/feed, where baseUrl is set in config.py)
+5. point podcast app to https://me.com/ec/feed (i.e., `baseUrl`/feed, where `baseUrl` is set in `config.py`)
 
 Testing
 
@@ -47,4 +47,4 @@ run `tests.py` and watch for errors like `[!] Error...`
 
 ## Notifications
 
-Gotify or Fastmail smtp (see config.py to set usernames and tokens)
+The app can notify your users by Gotify or smtp (see config.py to set usernames and tokens) when a new episode is available.
