@@ -2,3 +2,4 @@ pandas
 requests
 jinja2
 mutagen
+sqlite3

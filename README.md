@@ -17,8 +17,8 @@ APP_ROOT=/scratch/econpod-cron # set according to step 1
 python3 -m venv env
 source env/bin/activate
 pip install -r requirements.txt
+mkdir -p ${APP_ROOT}/data
 cp -r static $APP_ROOT
-mkdir ${APP_ROOT}/data
 ```
 
 3. config cron with the absolute path of the .py files, and the base url as the arg
