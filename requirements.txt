@@ -1,5 +1,4 @@
-Flask
-gunicorn
 pandas
 requests
-Flask-APScheduler
+jinja2
+mutagen
