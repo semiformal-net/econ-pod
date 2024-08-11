@@ -40,6 +40,9 @@ class Podcast:
         self.issue_number = issue_number
         self.articles=0
         self.totalsize=0
+        self.localextractionpath=''
+        self.dltime=None
+        self.podcasts=[]
 
     def date_issue_to_url(self,date,issue):
         year = date.strftime('%Y')
@@ -48,6 +51,193 @@ class Podcast:
         date = date.strftime('%Y%m%d')
         issuezip="http://audiocdn.economist.com/sites/default/files/AudioArchive/{0}/{2}/Issue_{1}_{2}_The_Economist_Full_edition.zip".format(year, issue, date)
         return issuezip
+
+    def next_issue(self):
+
+        now=datetime.datetime.now()
+
+        if now <= (self.publication_date + datetime.timedelta(7)):
+            return Podcast(publication_date=self.publication_date + datetime.timedelta(7), is_published=False, issue_number=self.issue_number+1)
+        else:
+            # there are one or more saturdays between the current issue and the next issue, so scan. This can arise for two reasons:
+            #   - the 'current issue' is way out of date, perhaps because the app has an old state
+            #   - we are at one of the times of the year when econ skip an issue (xmas or summer break)
+            # to find out what is happening you have to do two passes:
+            #  1. test all of the possible saturdays
+            #  2. figure out which one to return
+
+            d = datetime.date.today()
+            t = datetime.timedelta((12 - d.weekday()) % 7)
+            if t.days == 0: # if today is a saturday jump ahead a week
+                t=datetime.timedelta(days=7)
+            next_next_next_saturday=d + t + datetime.timedelta(days=21)
+            saturdays=pd.date_range(self.publication_date , next_next_next_saturday.strftime('%Y%m%d') ,freq='W-SAT') # a list of saturdays, starting with current issue, ending with saturday in about three weeks
+
+            issue_list=[]
+            i=1
+            base_issue_number=self.issue_number+1
+            while ( i<len(saturdays) ):
+                next_issue = Podcast(publication_date=saturdays[i], is_published=False, issue_number=base_issue_number)
+                ready=next_issue.issue_ready()
+                issue_list.append(next_issue)
+                #print('[DEBUG] Next issue ({}): {} || {}'.format(saturdays[i],ready,next_issue.url))
+                i=i+1
+                if ready:
+                    # each time you encounter a valid issue, increment the issue number
+                    base_issue_number=base_issue_number+1
+
+            # The last issue is published, return it
+            if issue_list[-1].is_published:
+                return issue_list[-1]
+
+            # all the tested issues are ready=False return the first upcoming one (after now())
+            i_ready=[ x.is_published for x in issue_list ]
+            if not any(i_ready):
+                dd=[ i for i in issue_list if i.publication_date>now ]
+                return dd[0]
+
+            # now it is weird. if a long time has past you can get a bunch of issues, some ready=True, some ready=False
+            # return the last one that is ready
+            dd=[ i for i in issue_list[::-1] if i.is_published ]
+            return dd[0]
+        return None
+
+    def dl_issue(self,pth):
+
+        #
+        # assumes that url has been checked
+        #
+
+        if self.dltime is not None and len(self.localextractionpath)>0 :
+            print('[*] File {} has already been extracted to {}'.format(self.url,self.localextractionpath))
+            return
+
+        now = datetime.datetime.now()
+        print('[*] Fetching {}'.format(self.url))
+
+        # unzip on the fly
+        try:
+            with urlopen(self.url) as zipresp:
+                with ZipFile(BytesIO(zipresp.read())) as zfile:
+                    zfile.extractall(os.path.join(pth,'audios')) # put unzipped files into the podcast static dir
+        except:
+            return None
+
+        self.localextractionpath=os.path.join(pth,'audios')
+        now2 = datetime.datetime.now()
+        self.dltime=(now2-now).total_seconds()
+
+    def audiodir_scan(self):
+        if len(self.localextractionpath)==0:
+            print('[*] Error: asked to scan audio directory before downloading!')
+            return
+
+        audios=[]
+        adir=self.localextractionpath
+        counter=0
+        sizecounter=0
+        cover_found = False
+        # iterate over files in that directory
+        for filename in sorted(os.listdir( adir )):
+            f = os.path.join(adir, filename)
+            # checking if it is a file
+            if os.path.isfile(f):
+                fname=os.path.basename(f)
+                pname, ext = os.path.splitext(fname)
+                # only process mp3s
+                if not ext.lower() == '.mp3':
+                    continue
+                # nudge the modified time _backward_ by a second sequentially. this way if the podcast client sorts by date (instead of by name, as recommended)
+                # then the articles will be in order
+                file_time=datetime.datetime.fromtimestamp(os.path.getmtime(f))  - datetime.timedelta(seconds=counter)
+                # date below should be RFC 822 format for atom spec.
+                # before saving titles, scrub out '&' and '<' which are not permitted in RSS (https://stackoverflow.com/questions/11783071/rss-feed-special-characters)
+                # filename gets cleaned up with urlencode by jinja (see template base.xml)
+                pname=pname.replace('&','&#x26;')
+                pname=pname.replace('<','&#x3C;')
+                hashmetxt=file_time.strftime('%Y-%m-%d') + fname # eg, something like: '2024-05-010001 - Introduction.mp3'
+                F={"title": pname,
+                "description": pname,
+                "filename":fname,
+                "date": utils.format_datetime(file_time), #file_time.strftime( "%a, %d %b %Y %H:%M:%S -05:00"),
+                "length": os.path.getsize(f),
+                "guid": hashlib.md5(hashmetxt.encode()).hexdigest() # the guid should be the same if the feed is regenerated, but should be different when a new issue comes out
+                }
+                audios.append(F)
+                counter=counter+1
+                sizecounter=sizecounter+os.path.getsize(f)
+        self.articles=counter
+        self.totalsize=sizecounter
+        self.audios=audios
+
+        print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( self.totalsize/1024**2 , self.articles, self.dltime , (self.totalsize/1024**2)/self.dltime ))
+        return
+
+    def build_json(self,baseUrl):
+        self.rsslastBuildDate=utils.format_datetime(datetime.datetime.now())
+        self.podcasts = {
+        "baseUrl" : baseUrl,
+        "podcast" : {
+            "title": "econpod",
+            "author" : "stickygecko",
+            "contactEmail" : "econpod@podcast.com",
+            "contactName" : "Anonymous",
+            "description" : "The current audio edition of the Economist",
+            "languaje" : "en-us",
+            "coverFilename" : "economist_logo.png",
+            "rssUrl" : "feed",
+            "lastBuildDate": self.rsslastBuildDate
+                    }
+        }
+        self.podcasts['podcast']['audios'] = self.audios
+        self.podcasts['podcast']['pubDate'] = utils.format_datetime(self.publication_date)
+        return
+
+    def write_rss(self,pth,jpth,tpth):
+
+        if not 'podcast' in self.podcasts:
+            return
+        if len(self.podcasts['podcast'])==0:
+            return
+        if not 'baseUrl' in self.podcasts:
+            return
+        # write a copy of the rss feed to a file
+        templateLoader = jinja2.FileSystemLoader(searchpath=jpth)
+        templateEnv = jinja2.Environment(loader=templateLoader)
+        template = templateEnv.get_template(tpth)
+        rendered = template.render(podcast=self.podcasts['podcast'], baseUrl=self.podcasts['baseUrl'])
+        with open(os.path.join(pth,'feed'),'w') as f:
+            f.write(rendered)
+
+    def publish(self,baseUrl,pth,jpth,tpth):
+        '''
+        pth - the static/ base path which contains the audios/ directory
+        jpth - the path containing the jinja template for rss (ie, base.xml)
+        tpth - the filename of the jinja template to use ('base.xml')
+        '''
+        try:
+            self.dl_issue(pth) # download and extract (to PODCAST_BASE_PATH/audios) the issue
+        except:
+            print('failed to scan audio dir')
+            return
+
+        try:
+            self.audiodir_scan()
+        except:
+            print('failed to scan audio dir')
+            return
+
+        try:
+            self.build_json(baseUrl)
+        except:
+            print('failed to build json')
+            return
+
+        try:
+            self.write_rss(pth,jpth,tpth)
+        except:
+            print('failed to write feed')
+            return
 
     def issue_ready(self):
         if self.url is None:
@@ -112,22 +302,6 @@ class FastmailSMTP(smtplib.SMTP_SSL):
 #
 ###############################################################
 
-def base_podcasts(baseurl):
-    return {
-    "baseUrl" : baseurl,
-    "podcast" : {
-        "title": "econpod",
-        "author" : "stickygecko",
-        "contactEmail" : "econpod@podcast.com",
-        "contactName" : "Anonymous",
-        "description" : "The current audio edition of the Economist",
-        "languaje" : "en-us",
-        "coverFilename" : "economist_logo.png",
-        "rssUrl" : "feed",
-        "lastBuildDate": utils.format_datetime(datetime.datetime.now())
-                }
-    }
-
 def get_current_issue_from_db(path):
     #
     # The rule is that the DB shall always store the last available (is_published=True) issue
@@ -152,81 +326,6 @@ def put_current_issue_to_db(current_issue,pth):
 
     with open(pth, 'wb') as f:
         pickle.dump(current_issue, f)
-
-def next_issue(current_issue):
-    if not isinstance(current_issue, Podcast):
-        return None
-
-    now=datetime.datetime.now()
-
-    if now <= (current_issue.publication_date + datetime.timedelta(7)):
-        return Podcast(publication_date=current_issue.publication_date + datetime.timedelta(7), is_published=False, issue_number=current_issue.issue_number+1)
-    else:
-        # there are one or more saturdays between the current issue and the next issue, so scan. This can arise for two reasons:
-        #   - the 'current issue' is way out of date, perhaps because the app has an old state
-        #   - we are at one of the times of the year when econ skip an issue (xmas or summer break)
-        # to find out what is happening you have to do two passes:
-        #  1. test all of the possible saturdays
-        #  2. figure out which one to return
-
-        d = datetime.date.today()
-        t = datetime.timedelta((12 - d.weekday()) % 7)
-        if t.days == 0: # if today is a saturday jump ahead a week
-            t=datetime.timedelta(days=7)
-        next_next_next_saturday=d + t + datetime.timedelta(days=21)
-        saturdays=pd.date_range(current_issue.publication_date , next_next_next_saturday.strftime('%Y%m%d') ,freq='W-SAT') # a list of saturdays, starting with current issue, ending with saturday in about three weeks
-
-        issue_list=[]
-        i=1
-        base_issue_number=current_issue.issue_number+1
-        while ( i<len(saturdays) ):
-            next_issue = Podcast(publication_date=saturdays[i], is_published=False, issue_number=base_issue_number)
-            ready=next_issue.issue_ready()
-            issue_list.append(next_issue)
-            #print('[DEBUG] Next issue ({}): {} || {}'.format(saturdays[i],ready,next_issue.url))
-            i=i+1
-            if ready:
-                # each time you encounter a valid issue, increment the issue number
-                base_issue_number=base_issue_number+1
-
-        # The last issue is published, return it
-        if issue_list[-1].is_published:
-            return issue_list[-1]
-
-        # all the tested issues are ready=False return the first upcoming one (after now())
-        i_ready=[ x.is_published for x in issue_list ]
-        if not any(i_ready):
-            dd=[ i for i in issue_list if i.publication_date>now ]
-            return dd[0]
-
-        # now it is weird. if a long time has past you can get a bunch of issues, some ready=True, some ready=False
-        # return the last one that is ready
-        dd=[ i for i in issue_list[::-1] if i.is_published ]
-        return dd[0]
-
-    return None
-
-def dl_issue(issuezip,pth):
-
-    #
-    # assumes that url has been checked
-    #
-
-    now = datetime.datetime.now()
-    print('[*] Fetching {}'.format(issuezip))
-
-    # unzip on the fly
-    try:
-        with urlopen(issuezip) as zipresp:
-            with ZipFile(BytesIO(zipresp.read())) as zfile:
-                zfile.extractall(os.path.join(pth,'audios')) # put unzipped files into the podcast static dir
-    except:
-        return None
-
-    now2 = datetime.datetime.now()
-    dltime=(now2-now).total_seconds()
-
-    return dltime
 
 def build_schedule():
     #
@@ -257,49 +356,6 @@ def build_issues(schedule_day):
         if (int(month) != 12) or (int(day) < 25): # no issue near xmas
             weeks=weeks+1
     return issues
-
-def audiodir_scan(pth):
-    audios=[]
-    adir=os.path.join(pth,'audios')
-    counter=0
-    sizecounter=0
-    cover_found = False
-    # iterate over files in that directory
-    for filename in sorted(os.listdir( adir )):
-        f = os.path.join(adir, filename)
-        # checking if it is a file
-        if os.path.isfile(f):
-            fname=os.path.basename(f)
-            pname, ext = os.path.splitext(fname)
-            # only process mp3s
-            if not ext.lower() == '.mp3':
-                continue
-            # nudge the modified time _backward_ by a second sequentially. this way if the podcast client sorts by date (instead of by name, as recommended)
-            # then the articles will be in order
-            file_time=datetime.datetime.fromtimestamp(os.path.getmtime(f))  - datetime.timedelta(seconds=counter)
-            # date below should be RFC 822 format for atom spec.
-            # before saving titles, scrub out '&' and '<' which are not permitted in RSS (https://stackoverflow.com/questions/11783071/rss-feed-special-characters)
-            # filename gets cleaned up with urlencode by jinja (see template base.xml)
-            pname=pname.replace('&','&#x26;')
-            pname=pname.replace('<','&#x3C;')
-            hashmetxt=file_time.strftime('%Y-%m-%d') + fname # eg, something like: '2024-05-010001 - Introduction.mp3'
-            F={"title": pname,
-            "description": pname,
-            "filename":fname,
-            "date": utils.format_datetime(file_time), #file_time.strftime( "%a, %d %b %Y %H:%M:%S -05:00"),
-            "length": os.path.getsize(f),
-            "guid": hashlib.md5(hashmetxt.encode()).hexdigest() # the guid should be the same if the feed is regenerated, but should be different when a new issue comes out
-            }
-            audios.append(F)
-            counter=counter+1
-            sizecounter=sizecounter+os.path.getsize(f)
-
-    return counter, sizecounter, audios
-
-def build_json(baseUrl,audios):
-    podcasts = base_podcasts(baseUrl)
-    podcasts['podcast']['audios'] = audios
-    return podcasts
 
 def gotify_push(gotify_host,gotify_token,msg):
     try:
@@ -340,62 +396,6 @@ def valid_podcast_available(pth):
         return False
 
     return True
-
-def publish(baseUrl,n,pth,jpth,tpth):
-    '''
-    baseUrl - the location where we are publishing
-    n - current_issue Podcast() instance
-    pth - the static/ base path which contains the audios/ directory
-    jpth - the path containing the jinja template for rss (ie, base.xml)
-    tpth - the filename of the jinja template to use ('base.xml')
-    '''
-
-    if not isinstance(n, Podcast):
-        print('[!] Error: publish() was not passed a valid issue')
-        return
-
-    if not os.path.isfile(os.path.join(jpth,tpth)):
-        print('[!] Error: publish() was not passed a valid jinja template')
-        return
-
-    try:
-        delete_files_in_directory(os.path.join(pth,'audios'))
-    except:
-        print('unable to purge old episodes')
-        return
-
-    try:
-        dltime=dl_issue(n.url,pth) # download and extract (to PODCAST_BASE_PATH/audios) the issue
-    except:
-        print('failed to download')
-        return
-    if dltime is None:
-        print('[!] Failed to download.')
-        return
-    try:
-        counter, sizecounter, audios=audiodir_scan(pth)
-        n.articles=counter
-        n.totalsize=sizecounter
-    except:
-        print('failed to scan audio dir')
-
-    try:
-        podcasts = build_json(baseUrl,audios)
-    except:
-        print('failed to build json')
-        return
-
-    podcasts['podcast']['pubDate'] = utils.format_datetime(n.publication_date)
-    filesize_mb=sizecounter/1024/1024
-    print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
-
-    # write a copy of the rss feed to a file
-    templateLoader = jinja2.FileSystemLoader(searchpath=jpth)
-    templateEnv = jinja2.Environment(loader=templateLoader)
-    template = templateEnv.get_template(tpth)
-    rendered = template.render(podcast=podcasts['podcast'], baseUrl=podcasts['baseUrl'])
-    with open(os.path.join(pth,'feed'),'w') as f:
-        f.write(rendered)
 
 def cold_start(PICKLE_PATH):
     # This is the cold start logic. If you are unable to warm start with a valid issue.
