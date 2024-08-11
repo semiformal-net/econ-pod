@@ -9,6 +9,9 @@
           <link>{{ baseUrl.rstrip('/') }}/{{ podcast['rssUrl'] | urlencode }}</link>
       </image>
       <language>{{ podcast['languaje'] }}</language>
+      <pubDate>{{ podcast['pubDate'] }}</pubDate>
+      <lastBuildDate>{{ podcast['lastBuildDate'] }}</lastBuildDate>
+      <ttl>3600</ttl>
       <link>{{ baseUrl.rstrip('/') }}/{{ podcast['rssUrl'] | urlencode }}</link>
       <atom:link href="{{ baseUrl.rstrip('/') }}/{{ podcast['rssUrl'] | urlencode }}" rel="self" type="application/rss+xml" />
       {% for audio in podcast['audios'] %}
@@ -18,7 +21,7 @@
          <description>{{ audio['description'] | e }}</description>
          <pubDate>{{ audio['date'] }}</pubDate>
          <enclosure url="{{ baseUrl.rstrip('/') ~ '/audios' }}/{{ audio['filename'] | urlencode }}" type="audio/mpeg" length="{{ audio['length'] }}" />
-         <guid isPermaLink="false">{{ range(9999999999999) | random }}</guid>
+         <guid isPermaLink="false">{{ audio['guid'] }}</guid>
       </item>
       {% endfor %}
    </channel>

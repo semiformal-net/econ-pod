@@ -3,6 +3,7 @@ import os
 import sys
 import datetime
 import pandas as pd
+import hashlib
 # for zip file download and extract
 from urllib.request import urlopen
 from urllib.error import HTTPError
@@ -122,7 +123,8 @@ def base_podcasts(baseurl):
         "description" : "The current audio edition of the Economist",
         "languaje" : "en-us",
         "coverFilename" : "economist_logo.png",
-        "rssUrl" : "feed"
+        "rssUrl" : "feed",
+        "lastBuildDate": utils.format_datetime(datetime.datetime.now())
                 }
     }
 
@@ -280,11 +282,13 @@ def audiodir_scan(pth):
             # filename gets cleaned up with urlencode by jinja (see template base.xml)
             pname=pname.replace('&','&#x26;')
             pname=pname.replace('<','&#x3C;')
+            hashmetxt=file_time.strftime('%Y-%m-%d') + fname # eg, something like: '2024-05-010001 - Introduction.mp3'
             F={"title": pname,
             "description": pname,
             "filename":fname,
             "date": utils.format_datetime(file_time), #file_time.strftime( "%a, %d %b %Y %H:%M:%S -05:00"),
-            "length": os.path.getsize(f)
+            "length": os.path.getsize(f),
+            "guid": hashlib.md5(hashmetxt.encode()).hexdigest() # the guid should be the same if the feed is regenerated, but should be different when a new issue comes out
             }
             audios.append(F)
             counter=counter+1
@@ -381,6 +385,7 @@ def publish(baseUrl,n,pth,jpth,tpth):
         print('failed to build json')
         return
 
+    podcasts['podcast']['pubDate'] = utils.format_datetime(n.publication_date)
     filesize_mb=sizecounter/1024/1024
     print('[*] Downloaded {:.1f}MB ({} files) in {:.1f}s ({:.1f} MB/s)'.format( filesize_mb , counter, dltime , filesize_mb/dltime  ))
 
