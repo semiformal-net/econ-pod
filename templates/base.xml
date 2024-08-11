@@ -17,8 +17,8 @@
          <author>{{ podcast['contactEmail'] }} ({{ podcast['author'] }})</author>
          <description>{{ audio['description'] | e }}</description>
          <pubDate>{{ audio['date'] }}</pubDate>
-	     <enclosure url="{{ baseUrl.rstrip('/') ~ '/audios' }}/{{ audio['filename'] | urlencode }}" type="audio/mpeg" length="{{ audio['length'] }}" />
-	     <guid isPermaLink="false">{{ range(9999999999999) | random }}</guid>
+         <enclosure url="{{ baseUrl.rstrip('/') ~ '/audios' }}/{{ audio['filename'] | urlencode }}" type="audio/mpeg" length="{{ audio['length'] }}" />
+         <guid isPermaLink="false">{{ range(9999999999999) | random }}</guid>
       </item>
       {% endfor %}
    </channel>
