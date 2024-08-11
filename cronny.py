@@ -44,8 +44,9 @@ def cron():
 
     if n.is_published:
         publish(baseUrl,n,PODCAST_BASE_PATH,JINJA_TEMPLATE_PATH,TEMPLATE_FILE)
-        gotify_push(gotify_host,gotify_token,'Cron: New episode ({}) is ready!'.format(n.publication_date.strftime("%Y/%m/%d")))
-        if len(EMAIL_NOTIFICATION)>0:
+        if GOTIFY_ENABLED:
+            gotify_push(gotify_host,gotify_token,'Cron: New episode ({}) is ready!'.format(n.publication_date.strftime("%Y/%m/%d")))
+        if SMTP_ENABLED:
             email_push(smtp_user,smtp_pw,EMAIL_NOTIFICATION,'New episode ({}) is ready!'.format(n.publication_date.strftime("%Y/%m/%d")))
         try:
             put_current_issue_to_db(n,PICKLE_PATH)
@@ -78,14 +79,45 @@ if __name__ == "__main__":
 
     print('[Debug] Base url: {}'.format(baseUrl))
 
-    gotify_host=gotify_host.rstrip('/') # no trailing slash
+    # Figure out the gotify secret
+    GOTIFY_ENABLED=False
+    try: gotify_host
+    except NameError: gotify_host = None
 
-    thesecrets=get_secrets( {GOTIFY_TOKEN_SECRET:'GOTIFY_TOKEN', SMTP_SECRET:'RELAY_PASSWORD'} )
-    if len(thesecrets) == 0:
-        print('[!] Warning: no valid secrets found. Notifications will not work.')
+    try: GOTIFY_TOKEN_SECRET
+    except NameError: GOTIFY_TOKEN_SECRET = None
+
+    if gotify_host is not None and GOTIFY_TOKEN_SECRET is not None:
+        gotify_host=gotify_host.rstrip('/') # no trailing slash
+        thesecrets=get_secrets( {GOTIFY_TOKEN_SECRET:'GOTIFY_TOKEN'} )
+        if len(thesecrets) == 0:
+            print('[!] Warning: gotify secrets not found. Notifications will not work.')
+        else:
+            gotify_token=thesecrets[0]
+            GOTIFY_ENABLED=True
     else:
-        gotify_token=thesecrets[0]
-        smtp_pw=thesecrets[1]
+        print('[!] Warning: gotify secrets not found. Notifications disabled.')
+
+    # Figure out the smtp secret
+    SMTP_ENABLED=False
+    try: smtp_user
+    except NameError: smtp_user = None
+
+    try: SMTP_SECRET
+    except NameError: SMTP_SECRET = None
+
+    try: EMAIL_NOTIFICATION
+    except NameError: EMAIL_NOTIFICATION = None
+
+    if smtp_user is not None and SMTP_SECRET is not None and EMAIL_NOTIFICATION is not None:
+        thesecrets=get_secrets( {SMTP_SECRET:'RELAY_PASSWORD'})
+        if len(thesecrets) == 0:
+            print('[!] Warning: smtp secrets not found. Notifications will not work.')
+        else:
+            smtp_pw=thesecrets[0]
+            SMTP_ENABLED=True
+    else:
+        print('[!] Warning: smtp secrets not found. Notifications disabled.')
 
     #
     #
@@ -136,6 +168,6 @@ if __name__ == "__main__":
 
     #z=Podcast(publication_date=datetime.datetime( 2023,9,30,0,0,0 ), is_published=True, issue_number=9365)
     #put_current_issue_to_db(z,PICKLE_PATH)
-    #sys.exit(5)
+    sys.exit(5)
 
     cron()

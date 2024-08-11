@@ -451,7 +451,7 @@ def get_secrets(secret_dict):
     for i in secret_dict.keys():
         if not os.path.isfile(i):
             print('[*] Warning: unable to read {}'.format(i))
-            secrets.append('SeCrEt')
+            #secrets.append('SeCrEt')
         else:
             with open(i,'r') as f:
                 r=f.readline()
@@ -460,7 +460,7 @@ def get_secrets(secret_dict):
                 secrets.append(r.split(':')[1].strip())
             else:
                 print('[*] Warning: secret file {} missing prefix {}'.format(i,secret_dict[i]))
-                secrets.append('SeCrEt')
+                #secrets.append('SeCrEt')
     return secrets
 
 #
