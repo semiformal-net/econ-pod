@@ -108,7 +108,7 @@ class Podcast:
         # assumes that url has been checked
         #
 
-        if self.dltime is not None and len(self.localextractionpath)>0 :
+        if self.dltime is not None and len(self.localextractionpath)>0 and valid_podcast_available(pth) :
             print('[*] File {} has already been extracted to {}'.format(self.url,self.localextractionpath))
             return
 
@@ -218,7 +218,7 @@ class Podcast:
         try:
             self.dl_issue(pth) # download and extract (to PODCAST_BASE_PATH/audios) the issue
         except:
-            print('failed to scan audio dir')
+            print('failed to scan audio dir',pth)
             return
 
         try:
