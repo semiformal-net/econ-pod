@@ -114,7 +114,7 @@ if __name__ == "__main__":
             smtp_pw=thesecrets[0]
             SMTP_ENABLED=True
     else:
-        print('[!] Warning: smtp secrets not found. Notifications disabled.')
+        print('[!] Warning: SMTP notifications disabled.')
 
     #
     #
