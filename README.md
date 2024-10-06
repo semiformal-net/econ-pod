@@ -34,6 +34,7 @@ For nginx use something like,
 ```
 location /ec/ {
             alias $APP_ROOT/static/;
+	    default_type application/xml;
     }
 ```
 
