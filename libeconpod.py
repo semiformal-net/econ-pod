@@ -259,7 +259,13 @@ class Podcast:
         return self.__dict__ == other.__dict__
     def __str__(self):
         # allows print(current_issue)
-        return 'Issue {} ({}): published={}\n\t{:.1f} MB ({} files)'.format(self.issue_number, self.publication_date, self.is_published, self.totalsize/1024/1024, self.articles)
+        return f"""\t Issue: {self.issue_number}
+\t Pubdate: {self.publication_date.strftime('%Y-%m-%d')}
+\t Published: {self.is_published}
+\t Size: {self.totalsize/1024/1024:.1f} MB ({self.articles} files)
+\t Download time: {self.dltime}s
+\t URL: {self.url}
+\t Local path: {self.localextractionpath}"""
 
 class FastmailSMTP(smtplib.SMTP_SSL):
     """A wrapper for handling SMTP connections to Fastmail."""
